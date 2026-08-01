@@ -1,0 +1,16 @@
+{
+  "name": "secure-duo-chat",
+  "version": "1.0.0",
+  "description": "2 kishilik, ma'lumotlar bazasisiz, real-time va end-to-end shifrlangan chat",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
