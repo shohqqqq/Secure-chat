@@ -254,6 +254,669 @@
   }
   .send-btn svg{width:19px; height:19px;}
 
+  .mic-btn{
+    width:46px; height:46px; border-radius:12px; flex-shrink:0; cursor:pointer;
+    background:var(--surface); border:1px solid var(--border); color:var(--muted);
+    font-size:19px; display:flex; align-items:center; justify-content:center;
+    transition:background .2s, color .2s, border-color .2s;
+  }
+  .mic-btn.recording{
+    background:rgba(248,113,113,.14); border-color:var(--danger); color:var(--danger);
+    animation:pulse 1s infinite;
+  }
+
+  .recording-bar{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px;
+    background:var(--surface-2);
+    border-top:1px solid var(--border);
+    font-family:var(--mono); font-size:12.5px; color:var(--text);
+  }
+  .rec-dot{width:9px; height:9px; border-radius:50%; background:var(--danger); animation:pulse 1s infinite; flex-shrink:0;}
+  .rec-label{color:var(--muted);}
+  .cancel-record{
+    margin-left:auto; background:none; border:1px solid var(--border); color:var(--muted);
+    font-family:var(--mono); font-size:11px; padding:6px 11px; border-radius:8px; cursor:pointer;
+  }
+  .cancel-record:hover{color:var(--danger); border-color:rgba(248,113,113,.4);}
+
+  .msg.audio-msg{padding:9px 11px 8px;}
+  .msg.audio-msg audio{
+    width:230px; max-width:58vw; display:block; border-radius:20px; height:36px;
+  }
+  audio::-webkit-media-controls-panel{ background-color:#0f1420; }
+
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--surface-2); border:1px solid var(--border); color:var(--text);
+    font-family:var(--mono); font-size:12.5px; padding:9px 16px; border-radius:20px;
+    opacity:0; transition:opacity .25s, transform .25s; pointer-events:none;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:480px){
+    .chat-wrap{height:94vh; border-radius:12px;}
+    .card{padding:26px 20px;}
+  }
+</style>
+</head>
+<body>
+
+  <!-- ============ JOIN SCREEN ============ -->
+  <div class="screen" id="joinScreen">
+    <div class="handshake">
+      <div class="hs-dot" id="dotA"></div>
+      <div class="hs-line" id="hsLine"></div>
+      <div class="hs-dot" id="dotB"></div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">// end-to-end shifrlangan</div>
+      <h1>Secure Line</h1>
+      <p class="sub">Faqat 2 kishilik yopiq xona. Xabarlar hech qayerda saqlanmaydi — sahifa yangilansa, hammasi izsiz o'chadi.</p>
+
+      <label for="roomInput">Xona nomi</label>
+      <input type="text" id="roomInput" placeholder="masalan: bizning-xona" autocomplete="off">
+
+      <label for="passInput">Maxfiy parol</label>
+      <input type="password" id="passInput" placeholder="ikkalangiz ham biladigan parol" autocomplete="off">
+
+      <button class="btn" id="joinBtn">Xonaga kirish</button>
+      <div class="error-msg" id="errorBox"></div>
+
+      <div class="foot-note">🔒 Kalit brauzeringizdan hech qachon chiqmaydi</div>
+    </div>
+  </div>
+
+  <!-- ============ CHAT SCREEN ============ -->
+  <div class="screen hidden" id="chatScreen" style="max-width:560px;">
+    <div class="chat-wrap">
+      <div class="chat-header">
+        <div class="room-title">
+          <span class="status-dot"></span>
+          <span id="roomLabel">xona</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="lock-badge">🔒 AES-256</span>
+          <button class="leave-btn" id="leaveBtn">Chiqish</button>
+        </div>
+      </div>
+
+      <div class="messages" id="messages"></div>
+      <div class="typing-indicator" id="typingIndicator">suhbatdosh yozmoqda...</div>
+
+      <div class="recording-bar hidden" id="recordingBar">
+        <span class="rec-dot"></span>
+        <span class="rec-label">Yozib olinmoqda...</span>
+        <span id="recordingTimer">00:00</span>
+        <button class="cancel-record" id="cancelRecordBtn">Bekor qilish</button>
+      </div>
+
+      <div class="input-bar">
+        <textarea id="msgInput" placeholder="Xabar yozing..." rows="1"></textarea>
+        <button class="mic-btn" id="micBtn" aria-label="Ovozli xabar">🎤</button>
+        <button class="send-btn" id="sendBtn" aria-label="Yuborish">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 11L21 3L13 21L11 13L3 11Z" fill="#0b0e14"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const joinScreen = document.getElementById('joinScreen');
+    const chatScreen = document.getElementById('chatScreen');
+    const roomInput = document.getElementById('roomInput');
+    const passInput = document.getElementById('passInput');
+    const joinBtn = document.getElementById('joinBtn');
+    const errorBox = document.getElementById('errorBox');
+    const dotA = document.getElementById('dotA');
+    const dotB = document.getElementById('dotB');
+    const hsLine = document.getElementById('hsLine');
+
+    const roomLabel = document.getElementById('roomLabel');
+    const messagesEl = document.getElementById('messages');
+    const msgInput = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const leaveBtn = document.getElementById('leaveBtn');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const toast = document.getElementById('toast');
+    const micBtn = document.getElementById('micBtn');
+    const recordingBar = document.getElementById('recordingBar');
+    const recordingTimer = document.getElementById('recordingTimer');
+    const cancelRecordBtn = document.getElementById('cancelRecordBtn');
+
+    let cryptoKey = null;
+    let currentRoom = null;
+    let typingTimeout = null;
+
+    // ---------- Ovozli xabar holati ----------
+    let mediaRecorder = null;
+    let mediaStream = null;
+    let audioChunks = [];
+    let recordStartTime = null;
+    let recordTimerInterval = null;
+    let recordAutoStopTimeout = null;
+    let shouldSendOnStop = true;
+    const MAX_RECORD_MS = 120000; // 2 daqiqa
+    const MAX_AUDIO_BYTES = 4 * 1024 * 1024; // 4MB
+
+    // ---------- Yordamchi funksiyalar ----------
+    function showToast(text){
+      toast.textContent = text;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 1600);
+    }
+
+    function showError(text){
+      errorBox.textContent = text;
+      errorBox.style.display = 'block';
+    }
+    function clearError(){
+      errorBox.style.display = 'none';
+    }
+
+    function bufToBase64(buf){
+      return btoa(String.fromCharCode(...new Uint8Array(buf)));
+    }
+    function base64ToBuf(b64){
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+      return bytes.buffer;
+    }
+
+    // Parol asosida AES-GCM kalitini brauzerda hosil qilamiz.
+    // Kalit HECH QACHON serverga yuborilmaydi.
+    async function deriveKey(password, room){
+      const enc = new TextEncoder();
+      const baseKey = await crypto.subtle.importKey(
+        'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
+      );
+      return crypto.subtle.deriveKey(
+        {
+          name: 'PBKDF2',
+          salt: enc.encode('secure-line-salt::' + room),
+          iterations: 150000,
+          hash: 'SHA-256'
+        },
+        baseKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      );
+    }
+
+    // Xonaga kirish huquqini tekshirish uchun alohida, faqat serverga
+    // yuboriladigan hash (parolning o'zi emas).
+    async function authHashFor(password, room){
+      const enc = new TextEncoder();
+      const data = enc.encode(`${password}:${room}:auth-v1`);
+      const digest = await crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2,'0')).join('');
+    }
+
+    async function encryptText(text){
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const enc = new TextEncoder();
+      const cipherBuf = await crypto.subtle.encrypt(
+        { name:'AES-GCM', iv }, cryptoKey, enc.encode(text)
+      );
+      return { iv: bufToBase64(iv), data: bufToBase64(cipherBuf) };
+    }
+
+    async function decryptText(ivB64, dataB64){
+      const iv = new Uint8Array(base64ToBuf(ivB64));
+      const cipherBuf = base64ToBuf(dataB64);
+      const plainBuf = await crypto.subtle.decrypt(
+        { name:'AES-GCM', iv }, cryptoKey, cipherBuf
+      );
+      return new TextDecoder().decode(plainBuf);
+    }
+
+    function addMessage(text, who){
+      const div = document.createElement('div');
+      div.className = 'msg ' + who;
+      const time = new Date().toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit'});
+      div.innerHTML = `${escapeHtml(text)}<span class="meta">${time}</span>`;
+      div.addEventListener('click', () => {
+        navigator.clipboard.writeText(text).then(() => showToast('Nusxalandi ✓'));
+      });
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function addAudioMessage(blob, who){
+      const url = URL.createObjectURL(blob);
+      const div = document.createElement('div');
+      div.className = 'msg audio-msg ' + who;
+      const time = new Date().toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit'});
+      div.innerHTML = `<audio controls src="${url}"></audio><span class="meta">${time}</span>`;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function addSystem(text){
+      const div = document.createElement('div');
+      div.className = 'msg-system';
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function escapeHtml(str){
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    function autoGrow(){
+      msgInput.style.height = 'auto';
+      msgInput.style.height = Math.min(msgInput.scrollHeight, 100) + 'px';
+    }
+
+    // ---------- Xonaga kirish ----------
+    async function attemptJoin(){
+      clearError();
+      const room = roomInput.value.trim();
+      const password = passInput.value;
+      if(!room || !password){
+        showError('Xona nomi va parolni to\'liq kiriting.');
+        return;
+      }
+
+      joinBtn.disabled = true;
+      joinBtn.textContent = 'Ulanmoqda...';
+
+      try{
+        cryptoKey = await deriveKey(password, room);
+        const hash = await authHashFor(password, room);
+        currentRoom = room;
+        socket.emit('join-room', { room, authHash: hash });
+      }catch(err){
+        showError('Kutilmagan xatolik yuz berdi.');
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Xonaga kirish';
+      }
+    }
+
+    joinBtn.addEventListener('click', attemptJoin);
+    passInput.addEventListener('keydown', e => { if(e.key === 'Enter') attemptJoin(); });
+    roomInput.addEventListener('keydown', e => { if(e.key === 'Enter') passInput.focus(); });
+
+    socket.on('join-error', ({ message }) => {
+      showError(message || 'Xonaga kirib bo\'lmadi.');
+      joinBtn.disabled = false;
+      joinBtn.textContent = 'Xonaga kirish';
+      dotA.classList.remove('active');
+      hsLine.classList.remove('active');
+    });
+
+    socket.on('joined', ({ room, peers }) => {
+      joinScreen.classList.add('hidden');
+      chatScreen.classList.remove('hidden');
+      roomLabel.textContent = room;
+      dotA.classList.add('active');
+      if(peers === 2) hsLine.classList.add('active');
+      msgInput.focus();
+    });
+
+    socket.on('system', ({ text }) => {
+      addSystem(text);
+      if(text.includes('kirdi')) {
+        dotB.classList.add('active');
+        hsLine.classList.add('active');
+      }
+    });
+
+    socket.on('encrypted-message', async (payload) => {
+      try{
+        if(payload.type === 'audio'){
+          const iv = new Uint8Array(base64ToBuf(payload.iv));
+          const cipherBuf = base64ToBuf(payload.data);
+          const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, cryptoKey, cipherBuf);
+          const blob = new Blob([plainBuf], { type: payload.mime || 'audio/webm' });
+          addAudioMessage(blob, 'them');
+        } else {
+          const text = await decryptText(payload.iv, payload.data);
+          addMessage(text, 'them');
+        }
+      }catch(err){
+        addSystem('Xabarni ochib bo\'lmadi (shifrlash xatosi).');
+      }
+    });
+
+    socket.on('typing', (isTyping) => {
+      typingIndicator.style.display = isTyping ? 'block' : 'none';
+      if(isTyping){
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+    });
+
+    // ---------- Xabar yuborish ----------
+    async function sendMessage(){
+      const text = msgInput.value.trim();
+      if(!text || !cryptoKey) return;
+      const payload = await encryptText(text);
+      socket.emit('encrypted-message', { type: 'text', ...payload });
+      addMessage(text, 'me');
+      msgInput.value = '';
+      autoGrow();
+      socket.emit('typing', false);
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    msgInput.addEventListener('input', () => {
+      autoGrow();
+      socket.emit('typing', msgInput.value.length > 0);
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => socket.emit('typing', false), 1200);
+    });
+    msgInput.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter' && !e.shiftKey){
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    leaveBtn.addEventListener('click', () => {
+      window.location.reload();
+    });
+
+    // ---------- Ovozli xabar yozib olish ----------
+    function formatTime(ms){
+      const secs = Math.floor(ms / 1000);
+      const m = String(Math.floor(secs / 60)).padStart(2, '0');
+      const s = String(secs % 60).padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function updateRecordingTimer(){
+      recordingTimer.textContent = formatTime(Date.now() - recordStartTime);
+    }
+
+    async function startRecording(){
+      if(!cryptoKey){
+        showToast('Avval xonaga ulaning.');
+        return;
+      }
+      try{
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }catch(err){
+        showToast('Mikrofonga ruxsat berilmadi.');
+        return;
+      }
+
+      audioChunks = [];
+      shouldSendOnStop = true;
+      mediaRecorder = new MediaRecorder(mediaStream);
+      mediaRecorder.ondataavailable = (e) => {
+        if(e.data && e.data.size > 0) audioChunks.push(e.data);
+      };
+      mediaRecorder.onstop = handleRecordingStop;
+      mediaRecorder.start();
+
+      recordStartTime = Date.now();
+      micBtn.classList.add('recording');
+      recordingBar.classList.remove('hidden');
+      recordingTimer.textContent = '00:00';
+      recordTimerInterval = setInterval(updateRecordingTimer, 250);
+      recordAutoStopTimeout = setTimeout(() => stopRecording(true), MAX_RECORD_MS);
+    }
+
+    function stopRecording(send){
+      shouldSendOnStop = send;
+      if(mediaRecorder && mediaRecorder.state === 'recording'){
+        mediaRecorder.stop();
+      }
+      clearInterval(recordTimerInterval);
+      clearTimeout(recordAutoStopTimeout);
+      micBtn.classList.remove('recording');
+      recordingBar.classList.add('hidden');
+      if(mediaStream){
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+    }
+
+    async function handleRecordingStop(){
+      const chunks = audioChunks;
+      audioChunks = [];
+      if(!shouldSendOnStop || chunks.length === 0) return;
+
+      const mimeType = mediaRecorder.mimeType || 'audio/webm';
+      const blob = new Blob(chunks, { type: mimeType });
+
+      if(blob.size === 0) return;
+      if(blob.size > MAX_AUDIO_BYTES){
+        showToast('Audio juda uzun — qisqaroq yozib ko\'ring.');
+        return;
+      }
+
+      try{
+        const arrayBuf = await blob.arrayBuffer();
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const cipherBuf = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, cryptoKey, arrayBuf);
+        socket.emit('encrypted-message', {
+          type: 'audio',
+          mime: mimeType,
+          iv: bufToBase64(iv),
+          data: bufToBase64(cipherBuf)
+        });
+        addAudioMessage(blob, 'me');
+      }catch(err){
+        showToast('Ovozli xabarni yuborishda xatolik.');
+      }
+    }
+
+    micBtn.addEventListener('click', () => {
+      if(mediaRecorder && mediaRecorder.state === 'recording'){
+        stopRecording(true);
+      }else{
+        startRecording();
+      }
+    });
+
+    cancelRecordBtn.addEventListener('click', () => stopRecording(false));
+  </script>
+</body>
+</html>
+    font-size:11px;
+    letter-spacing:2px;
+    color:var(--teal);
+    text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  h1{
+    font-family:var(--mono);
+    font-size:22px;
+    font-weight:700;
+    margin-bottom:6px;
+    letter-spacing:-.3px;
+  }
+  .sub{color:var(--muted); font-size:13.5px; margin-bottom:26px; line-height:1.5;}
+  label{
+    display:block; font-family:var(--mono); font-size:11px;
+    color:var(--muted); letter-spacing:1px; text-transform:uppercase;
+    margin-bottom:8px; margin-top:18px;
+  }
+  input[type=text], input[type=password]{
+    width:100%;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:13px 14px;
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:14.5px;
+    outline:none;
+    transition:border-color .2s, box-shadow .2s;
+  }
+  input[type=text]:focus, input[type=password]:focus{
+    border-color:var(--violet);
+    box-shadow:0 0 0 3px rgba(139,92,246,.15);
+  }
+  .btn{
+    width:100%;
+    margin-top:26px;
+    padding:14px;
+    border:none;
+    border-radius:10px;
+    background:linear-gradient(120deg, var(--violet), var(--teal));
+    color:#0b0e14;
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:14px;
+    letter-spacing:.5px;
+    cursor:pointer;
+    transition:transform .15s, opacity .15s;
+  }
+  .btn:hover{transform:translateY(-1px);}
+  .btn:active{transform:translateY(0);}
+  .btn:disabled{opacity:.5; cursor:not-allowed; transform:none;}
+  .error-msg{
+    margin-top:16px;
+    background:rgba(248,113,113,.08);
+    border:1px solid rgba(248,113,113,.3);
+    color:var(--danger);
+    font-size:13px;
+    padding:10px 12px;
+    border-radius:8px;
+    display:none;
+    font-family:var(--mono);
+  }
+  .foot-note{
+    margin-top:22px;
+    text-align:center;
+    font-size:11.5px;
+    color:var(--muted);
+    display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+
+  /* ---------- Chat screen ---------- */
+  .chat-wrap{
+    width:100%;
+    max-width:560px;
+    height:88vh;
+    max-height:820px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:16px;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,.4);
+  }
+  .chat-header{
+    padding:16px 18px;
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--surface-2);
+  }
+  .chat-header .room-title{
+    font-family:var(--mono); font-weight:600; font-size:14px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .status-dot{width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 8px rgba(45,214,196,.7); animation:pulse 1.6s infinite;}
+  .lock-badge{
+    font-family:var(--mono); font-size:11px; color:var(--teal);
+    border:1px solid rgba(45,214,196,.35); padding:4px 9px; border-radius:20px;
+    display:flex; align-items:center; gap:5px;
+  }
+  .leave-btn{
+    background:none; border:1px solid var(--border); color:var(--muted);
+    font-family:var(--mono); font-size:11px; padding:6px 10px; border-radius:8px; cursor:pointer;
+  }
+  .leave-btn:hover{color:var(--danger); border-color:rgba(248,113,113,.4);}
+
+  .messages{
+    flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:10px;
+    scroll-behavior:smooth;
+  }
+  .messages::-webkit-scrollbar{width:6px;}
+  .messages::-webkit-scrollbar-thumb{background:var(--border); border-radius:6px;}
+
+  .msg{
+    max-width:78%;
+    padding:10px 13px;
+    border-radius:14px;
+    font-size:14.5px;
+    line-height:1.45;
+    word-break:break-word;
+    white-space:pre-wrap;
+    user-select:text;
+    cursor:pointer;
+    position:relative;
+    animation:rise .25s ease;
+  }
+  @keyframes rise{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+  .msg.me{
+    align-self:flex-end;
+    background:linear-gradient(135deg, rgba(139,92,246,.9), rgba(45,214,196,.75));
+    color:#0b0e14;
+    border-bottom-right-radius:4px;
+    font-weight:500;
+  }
+  .msg.them{
+    align-self:flex-start;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-bottom-left-radius:4px;
+  }
+  .msg .meta{
+    display:block; font-family:var(--mono); font-size:10px; opacity:.65; margin-top:4px;
+  }
+  .msg-system{
+    align-self:center;
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--muted);
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    padding:6px 12px;
+    border-radius:20px;
+  }
+  .typing-indicator{
+    align-self:flex-start;
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--muted);
+    padding:0 4px;
+    height:16px;
+    display:none;
+  }
+
+  .input-bar{
+    display:flex; gap:10px; padding:14px; border-top:1px solid var(--border);
+    background:var(--surface-2);
+  }
+  .input-bar textarea{
+    flex:1;
+    resize:none;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px 14px;
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:14.5px;
+    outline:none;
+    max-height:100px;
+    line-height:1.4;
+  }
+  .input-bar textarea:focus{border-color:var(--violet);}
+  .send-btn{
+    width:46px; height:46px; border-radius:12px; border:none; cursor:pointer;
+    background:linear-gradient(120deg, var(--violet), var(--teal));
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .send-btn svg{width:19px; height:19px;}
+
   .toast{
     position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
     background:var(--surface-2); border:1px solid var(--border); color:var(--text);
