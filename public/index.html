@@ -265,6 +265,31 @@
     animation:pulse 1s infinite;
   }
 
+  .img-btn{
+    width:46px; height:46px; border-radius:12px; flex-shrink:0; cursor:pointer;
+    background:var(--surface); border:1px solid var(--border); color:var(--muted);
+    font-size:19px; display:flex; align-items:center; justify-content:center;
+    transition:background .2s, color .2s, border-color .2s;
+  }
+  .img-btn:hover{border-color:var(--violet); color:var(--text);}
+  .img-btn:disabled{opacity:.5; cursor:not-allowed;}
+
+  .msg.image-msg{padding:6px; cursor:default;}
+  .msg.image-msg img{
+    display:block; max-width:220px; max-height:280px; width:100%;
+    border-radius:10px; cursor:zoom-in; object-fit:cover;
+  }
+  .msg.image-msg .meta{padding:4px 6px 2px;}
+
+  .lightbox{
+    position:fixed; inset:0; background:rgba(6,8,13,.92);
+    display:flex; align-items:center; justify-content:center;
+    z-index:1000; padding:24px; cursor:zoom-out;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  .lightbox.show{opacity:1; pointer-events:auto;}
+  .lightbox img{max-width:100%; max-height:100%; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,.6);}
+
   .recording-bar{
     display:flex; align-items:center; gap:10px;
     padding:10px 14px;
@@ -353,6 +378,8 @@
 
       <div class="input-bar">
         <textarea id="msgInput" placeholder="Xabar yozing..." rows="1"></textarea>
+        <input type="file" id="imgFileInput" accept="image/*" style="display:none;">
+        <button class="img-btn" id="imgBtn" aria-label="Rasm yuborish">📷</button>
         <button class="mic-btn" id="micBtn" aria-label="Ovozli xabar">🎤</button>
         <button class="send-btn" id="sendBtn" aria-label="Yuborish">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -364,6 +391,10 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <div class="lightbox" id="lightbox">
+    <img id="lightboxImg" src="" alt="">
+  </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -390,6 +421,10 @@
     const recordingBar = document.getElementById('recordingBar');
     const recordingTimer = document.getElementById('recordingTimer');
     const cancelRecordBtn = document.getElementById('cancelRecordBtn');
+    const imgBtn = document.getElementById('imgBtn');
+    const imgFileInput = document.getElementById('imgFileInput');
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightboxImg');
 
     let cryptoKey = null;
     let currentRoom = null;
@@ -501,6 +536,25 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    function addImageMessage(blob, who){
+      const url = URL.createObjectURL(blob);
+      const div = document.createElement('div');
+      div.className = 'msg image-msg ' + who;
+      const time = new Date().toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit'});
+      div.innerHTML = `<img src="${url}" alt="rasm"><span class="meta">${time}</span>`;
+      div.querySelector('img').addEventListener('click', () => {
+        lightboxImg.src = url;
+        lightbox.classList.add('show');
+      });
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    lightbox.addEventListener('click', () => {
+      lightbox.classList.remove('show');
+      lightboxImg.src = '';
+    });
+
     function addSystem(text){
       const div = document.createElement('div');
       div.className = 'msg-system';
@@ -576,12 +630,17 @@
 
     socket.on('encrypted-message', async (payload) => {
       try{
+        const iv = new Uint8Array(base64ToBuf(payload.iv));
         if(payload.type === 'audio'){
-          const iv = new Uint8Array(base64ToBuf(payload.iv));
           const cipherBuf = base64ToBuf(payload.data);
           const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, cryptoKey, cipherBuf);
           const blob = new Blob([plainBuf], { type: payload.mime || 'audio/webm' });
           addAudioMessage(blob, 'them');
+        } else if(payload.type === 'image'){
+          const cipherBuf = base64ToBuf(payload.data);
+          const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, cryptoKey, cipherBuf);
+          const blob = new Blob([plainBuf], { type: payload.mime || 'image/jpeg' });
+          addImageMessage(blob, 'them');
         } else {
           const text = await decryptText(payload.iv, payload.data);
           addMessage(text, 'them');
@@ -723,6 +782,81 @@
     });
 
     cancelRecordBtn.addEventListener('click', () => stopRecording(false));
+
+    // ---------- Rasm yuborish ----------
+    const MAX_IMAGE_DIMENSION = 1440;
+    const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB (siqilgandan keyin)
+
+    imgBtn.addEventListener('click', () => {
+      if(!cryptoKey){
+        showToast('Avval xonaga ulaning.');
+        return;
+      }
+      imgFileInput.value = '';
+      imgFileInput.click();
+    });
+
+    function compressImage(file){
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('read-failed'));
+        reader.onload = () => {
+          img.onerror = () => reject(new Error('decode-failed'));
+          img.onload = () => {
+            let { width, height } = img;
+            if(width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION){
+              const scale = MAX_IMAGE_DIMENSION / Math.max(width, height);
+              width = Math.round(width * scale);
+              height = Math.round(height * scale);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => blob ? resolve(blob) : reject(new Error('compress-failed')),
+              'image/jpeg',
+              0.82
+            );
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    imgFileInput.addEventListener('change', async () => {
+      const file = imgFileInput.files && imgFileInput.files[0];
+      if(!file) return;
+
+      imgBtn.disabled = true;
+      imgBtn.textContent = '⏳';
+
+      try{
+        const compressed = await compressImage(file);
+        if(compressed.size > MAX_IMAGE_BYTES){
+          showToast('Rasm hajmi juda katta.');
+          return;
+        }
+        const arrayBuf = await compressed.arrayBuffer();
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const cipherBuf = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, cryptoKey, arrayBuf);
+        socket.emit('encrypted-message', {
+          type: 'image',
+          mime: 'image/jpeg',
+          iv: bufToBase64(iv),
+          data: bufToBase64(cipherBuf)
+        });
+        addImageMessage(compressed, 'me');
+      }catch(err){
+        showToast('Rasmni yuborishda xatolik yuz berdi.');
+      }finally{
+        imgBtn.disabled = false;
+        imgBtn.textContent = '📷';
+      }
+    });
   </script>
 </body>
 </html>
