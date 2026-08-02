@@ -61,6 +61,18 @@
     padding:32px 28px;
     box-shadow:0 20px 60px rgba(0,0,0,.4);
   }
+  .lang-switch{
+    display:flex; justify-content:flex-end; gap:6px; margin-bottom:18px;
+  }
+  .lang-switch button{
+    background:var(--surface-2); border:1px solid var(--border); color:var(--muted);
+    font-family:var(--mono); font-size:11px; padding:5px 10px; border-radius:8px; cursor:pointer;
+    transition:background .2s, color .2s, border-color .2s;
+  }
+  .lang-switch button.active{
+    background:linear-gradient(120deg, var(--violet), var(--teal));
+    color:#0b0e14; border-color:transparent; font-weight:700;
+  }
   .eyebrow{
     font-family:var(--mono);
     font-size:11px;
@@ -208,6 +220,10 @@
   .msg .meta{
     display:block; font-family:var(--mono); font-size:10px; opacity:.65; margin-top:4px;
   }
+  .msg .status{
+    margin-left:5px; opacity:.7; font-weight:700;
+  }
+  .msg .status.read{ opacity:1; }
   .msg-system{
     align-self:center;
     font-family:var(--mono);
@@ -335,20 +351,25 @@
       <div class="hs-dot" id="dotB"></div>
     </div>
     <div class="card">
-      <div class="eyebrow">// end-to-end shifrlangan</div>
+      <div class="lang-switch">
+        <button data-lang="uz" class="active">UZ</button>
+        <button data-lang="ru">RU</button>
+        <button data-lang="en">EN</button>
+      </div>
+      <div class="eyebrow" data-i18n="eyebrow">// end-to-end shifrlangan</div>
       <h1>Secure Line</h1>
-      <p class="sub">Faqat 2 kishilik yopiq xona. Xabarlar hech qayerda saqlanmaydi — sahifa yangilansa, hammasi izsiz o'chadi.</p>
+      <p class="sub" data-i18n="subtitle">Faqat 2 kishilik yopiq xona. Xabarlar hech qayerda saqlanmaydi — sahifa yangilansa, hammasi izsiz o'chadi.</p>
 
-      <label for="roomInput">Xona nomi</label>
-      <input type="text" id="roomInput" placeholder="masalan: bizning-xona" autocomplete="off">
+      <label for="roomInput" data-i18n="roomLabel">Xona nomi</label>
+      <input type="text" id="roomInput" data-i18n-placeholder="roomPlaceholder" placeholder="masalan: bizning-xona" autocomplete="off">
 
-      <label for="passInput">Maxfiy parol</label>
-      <input type="password" id="passInput" placeholder="ikkalangiz ham biladigan parol" autocomplete="off">
+      <label for="passInput" data-i18n="passLabel">Maxfiy parol</label>
+      <input type="password" id="passInput" data-i18n-placeholder="passPlaceholder" placeholder="ikkalangiz ham biladigan parol" autocomplete="off">
 
-      <button class="btn" id="joinBtn">Xonaga kirish</button>
+      <button class="btn" id="joinBtn" data-i18n="joinBtn">Xonaga kirish</button>
       <div class="error-msg" id="errorBox"></div>
 
-      <div class="foot-note">🔒 Kalit brauzeringizdan hech qachon chiqmaydi</div>
+      <div class="foot-note" data-i18n="footNote">🔒 Kalit brauzeringizdan hech qachon chiqmaydi</div>
     </div>
   </div>
 
@@ -362,22 +383,22 @@
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <span class="lock-badge">🔒 AES-256</span>
-          <button class="leave-btn" id="leaveBtn">Chiqish</button>
+          <button class="leave-btn" id="leaveBtn" data-i18n="leaveBtn">Chiqish</button>
         </div>
       </div>
 
       <div class="messages" id="messages"></div>
-      <div class="typing-indicator" id="typingIndicator">suhbatdosh yozmoqda...</div>
+      <div class="typing-indicator" id="typingIndicator" data-i18n="typingIndicator">suhbatdosh yozmoqda...</div>
 
       <div class="recording-bar hidden" id="recordingBar">
         <span class="rec-dot"></span>
-        <span class="rec-label">Yozib olinmoqda...</span>
+        <span class="rec-label" data-i18n="recLabel">Yozib olinmoqda...</span>
         <span id="recordingTimer">00:00</span>
-        <button class="cancel-record" id="cancelRecordBtn">Bekor qilish</button>
+        <button class="cancel-record" id="cancelRecordBtn" data-i18n="cancelRecord">Bekor qilish</button>
       </div>
 
       <div class="input-bar">
-        <textarea id="msgInput" placeholder="Xabar yozing..." rows="1"></textarea>
+        <textarea id="msgInput" data-i18n-placeholder="msgPlaceholder" placeholder="Xabar yozing..." rows="1"></textarea>
         <input type="file" id="imgFileInput" accept="image/*" style="display:none;">
         <button class="img-btn" id="imgBtn" aria-label="Rasm yuborish">📷</button>
         <button class="mic-btn" id="micBtn" aria-label="Ovozli xabar">🎤</button>
@@ -399,6 +420,160 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
+
+    // ---------- Til tanlash (i18n) ----------
+    const translations = {
+      uz: {
+        eyebrow: '// end-to-end shifrlangan',
+        subtitle: "Faqat 2 kishilik yopiq xona. Xabarlar hech qayerda saqlanmaydi — sahifa yangilansa, hammasi izsiz o'chadi.",
+        roomLabel: 'Xona nomi',
+        passLabel: 'Maxfiy parol',
+        roomPlaceholder: 'masalan: bizning-xona',
+        passPlaceholder: 'ikkalangiz ham biladigan parol',
+        joinBtn: 'Xonaga kirish',
+        joiningBtn: 'Ulanmoqda...',
+        footNote: "🔒 Kalit brauzeringizdan hech qachon chiqmaydi",
+        leaveBtn: 'Chiqish',
+        msgPlaceholder: 'Xabar yozing...',
+        typingIndicator: 'suhbatdosh yozmoqda...',
+        recLabel: 'Yozib olinmoqda...',
+        cancelRecord: 'Bekor qilish',
+        errors: {
+          invalid: "Xona nomi yoki parol noto'g'ri formatda.",
+          wrongPassword: "Parol noto'g'ri.",
+          full: "Bu xona allaqachon 2 kishi bilan to'lgan.",
+          unexpected: 'Kutilmagan xatolik yuz berdi.',
+          roomPassRequired: "Xona nomi va parolni to'liq kiriting."
+        },
+        system: {
+          waiting: 'Xonaga muvaffaqiyatli kirdingiz. Suhbatdosh kutilmoqda...',
+          bothConnected: 'Suhbatdosh xonaga kirdi. Endi ikkalangiz ham ulangansiz.',
+          partnerLeft: 'Suhbatdosh xonadan chiqib ketdi.',
+          decryptError: "Xabarni ochib bo'lmadi (shifrlash xatosi)."
+        },
+        toast: {
+          copied: 'Nusxalandi ✓',
+          connectFirst: 'Avval xonaga ulaning.',
+          micDenied: 'Mikrofonga ruxsat berilmadi.',
+          audioTooLong: "Audio juda uzun — qisqaroq yozib ko'ring.",
+          audioSendError: 'Ovozli xabarni yuborishda xatolik.',
+          imageTooBig: 'Rasm hajmi juda katta.',
+          imageSendError: 'Rasmni yuborishda xatolik yuz berdi.'
+        }
+      },
+      ru: {
+        eyebrow: '// сквозное шифрование',
+        subtitle: 'Только закрытая комната на 2 человека. Сообщения нигде не сохраняются — при обновлении страницы всё бесследно исчезает.',
+        roomLabel: 'Название комнаты',
+        passLabel: 'Секретный пароль',
+        roomPlaceholder: 'например: наша-комната',
+        passPlaceholder: 'пароль, который знаете вы оба',
+        joinBtn: 'Войти в комнату',
+        joiningBtn: 'Подключение...',
+        footNote: '🔒 Ключ никогда не покидает ваш браузер',
+        leaveBtn: 'Выйти',
+        msgPlaceholder: 'Напишите сообщение...',
+        typingIndicator: 'собеседник печатает...',
+        recLabel: 'Идёт запись...',
+        cancelRecord: 'Отменить',
+        errors: {
+          invalid: 'Неверный формат названия комнаты или пароля.',
+          wrongPassword: 'Неверный пароль.',
+          full: 'В этой комнате уже 2 человека.',
+          unexpected: 'Произошла непредвиденная ошибка.',
+          roomPassRequired: 'Заполните название комнаты и пароль.'
+        },
+        system: {
+          waiting: 'Вы успешно вошли в комнату. Ожидание собеседника...',
+          bothConnected: 'Собеседник подключился. Теперь вы оба в сети.',
+          partnerLeft: 'Собеседник покинул комнату.',
+          decryptError: 'Не удалось расшифровать сообщение.'
+        },
+        toast: {
+          copied: 'Скопировано ✓',
+          connectFirst: 'Сначала подключитесь к комнате.',
+          micDenied: 'Доступ к микрофону запрещён.',
+          audioTooLong: 'Аудио слишком длинное — запишите короче.',
+          audioSendError: 'Ошибка при отправке голосового сообщения.',
+          imageTooBig: 'Размер изображения слишком большой.',
+          imageSendError: 'Ошибка при отправке изображения.'
+        }
+      },
+      en: {
+        eyebrow: '// end-to-end encrypted',
+        subtitle: 'A closed room for 2 people only. Messages are never stored — refresh the page and everything disappears without a trace.',
+        roomLabel: 'Room name',
+        passLabel: 'Secret password',
+        roomPlaceholder: 'e.g. our-room',
+        passPlaceholder: 'a password you both know',
+        joinBtn: 'Enter room',
+        joiningBtn: 'Connecting...',
+        footNote: '🔒 The key never leaves your browser',
+        leaveBtn: 'Leave',
+        msgPlaceholder: 'Type a message...',
+        typingIndicator: 'your partner is typing...',
+        recLabel: 'Recording...',
+        cancelRecord: 'Cancel',
+        errors: {
+          invalid: 'Invalid room name or password format.',
+          wrongPassword: 'Incorrect password.',
+          full: 'This room already has 2 people.',
+          unexpected: 'An unexpected error occurred.',
+          roomPassRequired: 'Please fill in both room name and password.'
+        },
+        system: {
+          waiting: "You've joined the room. Waiting for your partner...",
+          bothConnected: 'Your partner joined. You are both connected now.',
+          partnerLeft: 'Your partner left the room.',
+          decryptError: 'Could not decrypt the message.'
+        },
+        toast: {
+          copied: 'Copied ✓',
+          connectFirst: 'Join a room first.',
+          micDenied: 'Microphone access denied.',
+          audioTooLong: 'Recording too long — keep it shorter.',
+          audioSendError: 'Error sending voice message.',
+          imageTooBig: 'Image is too large.',
+          imageSendError: 'Error sending image.'
+        }
+      }
+    };
+
+    let currentLang = 'uz';
+
+    function t(path){
+      const parts = path.split('.');
+      let obj = translations[currentLang];
+      for(const p of parts){
+        if(!obj) return '';
+        obj = obj[p];
+      }
+      return typeof obj === 'string' ? obj : '';
+    }
+
+    function applyTranslations(){
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const val = t(el.getAttribute('data-i18n'));
+        if(val) el.textContent = val;
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const val = t(el.getAttribute('data-i18n-placeholder'));
+        if(val) el.placeholder = val;
+      });
+      document.querySelectorAll('.lang-switch button').forEach(b => {
+        b.classList.toggle('active', b.dataset.lang === currentLang);
+      });
+    }
+
+    function setLanguage(lang){
+      if(!translations[lang]) return;
+      currentLang = lang;
+      applyTranslations();
+    }
+
+    document.querySelectorAll('.lang-switch button').forEach(b => {
+      b.addEventListener('click', () => setLanguage(b.dataset.lang));
+    });
 
     const joinScreen = document.getElementById('joinScreen');
     const chatScreen = document.getElementById('chatScreen');
@@ -514,34 +689,53 @@
       return new TextDecoder().decode(plainBuf);
     }
 
-    function addMessage(text, who){
+    function genMsgId(){
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+
+    function addMessage(text, who, id){
       const div = document.createElement('div');
       div.className = 'msg ' + who;
+      if(id) div.dataset.msgId = id;
       const time = new Date().toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit'});
-      div.innerHTML = `${escapeHtml(text)}<span class="meta">${time}</span>`;
+      const statusHtml = (who === 'me') ? ` <span class="status" data-status>✓</span>` : '';
+      div.innerHTML = `${escapeHtml(text)}<span class="meta">${time}${statusHtml}</span>`;
       div.addEventListener('click', () => {
-        navigator.clipboard.writeText(text).then(() => showToast('Nusxalandi ✓'));
+        navigator.clipboard.writeText(text).then(() => showToast(t('toast.copied')));
       });
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    function addAudioMessage(blob, who){
+    function markAsRead(id){
+      if(!id) return;
+      const el = messagesEl.querySelector(`[data-msg-id="${id}"] [data-status]`);
+      if(el){
+        el.textContent = '✓✓';
+        el.classList.add('read');
+      }
+    }
+
+    function addAudioMessage(blob, who, id){
       const url = URL.createObjectURL(blob);
       const div = document.createElement('div');
       div.className = 'msg audio-msg ' + who;
+      if(id) div.dataset.msgId = id;
       const time = new Date().toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit'});
-      div.innerHTML = `<audio controls src="${url}"></audio><span class="meta">${time}</span>`;
+      const statusHtml = (who === 'me') ? ` <span class="status" data-status>✓</span>` : '';
+      div.innerHTML = `<audio controls src="${url}"></audio><span class="meta">${time}${statusHtml}</span>`;
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    function addImageMessage(blob, who){
+    function addImageMessage(blob, who, id){
       const url = URL.createObjectURL(blob);
       const div = document.createElement('div');
       div.className = 'msg image-msg ' + who;
+      if(id) div.dataset.msgId = id;
       const time = new Date().toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit'});
-      div.innerHTML = `<img src="${url}" alt="rasm"><span class="meta">${time}</span>`;
+      const statusHtml = (who === 'me') ? ` <span class="status" data-status>✓</span>` : '';
+      div.innerHTML = `<img src="${url}" alt="rasm"><span class="meta">${time}${statusHtml}</span>`;
       div.querySelector('img').addEventListener('click', () => {
         lightboxImg.src = url;
         lightbox.classList.add('show');
@@ -580,12 +774,12 @@
       const room = roomInput.value.trim();
       const password = passInput.value;
       if(!room || !password){
-        showError('Xona nomi va parolni to\'liq kiriting.');
+        showError(t('errors.roomPassRequired'));
         return;
       }
 
       joinBtn.disabled = true;
-      joinBtn.textContent = 'Ulanmoqda...';
+      joinBtn.textContent = t('joiningBtn');
 
       try{
         cryptoKey = await deriveKey(password, room);
@@ -593,9 +787,9 @@
         currentRoom = room;
         socket.emit('join-room', { room, authHash: hash });
       }catch(err){
-        showError('Kutilmagan xatolik yuz berdi.');
+        showError(t('errors.unexpected'));
         joinBtn.disabled = false;
-        joinBtn.textContent = 'Xonaga kirish';
+        joinBtn.textContent = t('joinBtn');
       }
     }
 
@@ -603,10 +797,15 @@
     passInput.addEventListener('keydown', e => { if(e.key === 'Enter') attemptJoin(); });
     roomInput.addEventListener('keydown', e => { if(e.key === 'Enter') passInput.focus(); });
 
-    socket.on('join-error', ({ message }) => {
-      showError(message || 'Xonaga kirib bo\'lmadi.');
+    socket.on('join-error', ({ reason }) => {
+      const map = {
+        'invalid': 'errors.invalid',
+        'wrong-password': 'errors.wrongPassword',
+        'full': 'errors.full'
+      };
+      showError(t(map[reason] || 'errors.unexpected'));
       joinBtn.disabled = false;
-      joinBtn.textContent = 'Xonaga kirish';
+      joinBtn.textContent = t('joinBtn');
       dotA.classList.remove('active');
       hsLine.classList.remove('active');
     });
@@ -620,9 +819,14 @@
       msgInput.focus();
     });
 
-    socket.on('system', ({ text }) => {
-      addSystem(text);
-      if(text.includes('kirdi')) {
+    socket.on('system', ({ key }) => {
+      const map = {
+        'waiting': 'system.waiting',
+        'both-connected': 'system.bothConnected',
+        'partner-left': 'system.partnerLeft'
+      };
+      addSystem(t(map[key] || ''));
+      if(key === 'both-connected'){
         dotB.classList.add('active');
         hsLine.classList.add('active');
       }
@@ -635,19 +839,26 @@
           const cipherBuf = base64ToBuf(payload.data);
           const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, cryptoKey, cipherBuf);
           const blob = new Blob([plainBuf], { type: payload.mime || 'audio/webm' });
-          addAudioMessage(blob, 'them');
+          addAudioMessage(blob, 'them', payload.id);
         } else if(payload.type === 'image'){
           const cipherBuf = base64ToBuf(payload.data);
           const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, cryptoKey, cipherBuf);
           const blob = new Blob([plainBuf], { type: payload.mime || 'image/jpeg' });
-          addImageMessage(blob, 'them');
+          addImageMessage(blob, 'them', payload.id);
         } else {
           const text = await decryptText(payload.iv, payload.data);
-          addMessage(text, 'them');
+          addMessage(text, 'them', payload.id);
+        }
+        if(payload.id){
+          socket.emit('message-read', { id: payload.id });
         }
       }catch(err){
-        addSystem('Xabarni ochib bo\'lmadi (shifrlash xatosi).');
+        addSystem(t('system.decryptError'));
       }
+    });
+
+    socket.on('message-read', ({ id }) => {
+      markAsRead(id);
     });
 
     socket.on('typing', (isTyping) => {
@@ -662,8 +873,9 @@
       const text = msgInput.value.trim();
       if(!text || !cryptoKey) return;
       const payload = await encryptText(text);
-      socket.emit('encrypted-message', { type: 'text', ...payload });
-      addMessage(text, 'me');
+      const id = genMsgId();
+      socket.emit('encrypted-message', { type: 'text', id, ...payload });
+      addMessage(text, 'me', id);
       msgInput.value = '';
       autoGrow();
       socket.emit('typing', false);
@@ -687,6 +899,8 @@
       window.location.reload();
     });
 
+    applyTranslations();
+
     // ---------- Ovozli xabar yozib olish ----------
     function formatTime(ms){
       const secs = Math.floor(ms / 1000);
@@ -701,13 +915,13 @@
 
     async function startRecording(){
       if(!cryptoKey){
-        showToast('Avval xonaga ulaning.');
+        showToast(t('toast.connectFirst'));
         return;
       }
       try{
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }catch(err){
-        showToast('Mikrofonga ruxsat berilmadi.');
+        showToast(t('toast.micDenied'));
         return;
       }
 
@@ -753,7 +967,7 @@
 
       if(blob.size === 0) return;
       if(blob.size > MAX_AUDIO_BYTES){
-        showToast('Audio juda uzun — qisqaroq yozib ko\'ring.');
+        showToast(t('toast.audioTooLong'));
         return;
       }
 
@@ -761,15 +975,17 @@
         const arrayBuf = await blob.arrayBuffer();
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const cipherBuf = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, cryptoKey, arrayBuf);
+        const id = genMsgId();
         socket.emit('encrypted-message', {
           type: 'audio',
+          id,
           mime: mimeType,
           iv: bufToBase64(iv),
           data: bufToBase64(cipherBuf)
         });
-        addAudioMessage(blob, 'me');
+        addAudioMessage(blob, 'me', id);
       }catch(err){
-        showToast('Ovozli xabarni yuborishda xatolik.');
+        showToast(t('toast.audioSendError'));
       }
     }
 
@@ -789,7 +1005,7 @@
 
     imgBtn.addEventListener('click', () => {
       if(!cryptoKey){
-        showToast('Avval xonaga ulaning.');
+        showToast(t('toast.connectFirst'));
         return;
       }
       imgFileInput.value = '';
@@ -837,21 +1053,23 @@
       try{
         const compressed = await compressImage(file);
         if(compressed.size > MAX_IMAGE_BYTES){
-          showToast('Rasm hajmi juda katta.');
+          showToast(t('toast.imageTooBig'));
           return;
         }
         const arrayBuf = await compressed.arrayBuffer();
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const cipherBuf = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, cryptoKey, arrayBuf);
+        const id = genMsgId();
         socket.emit('encrypted-message', {
           type: 'image',
+          id,
           mime: 'image/jpeg',
           iv: bufToBase64(iv),
           data: bufToBase64(cipherBuf)
         });
-        addImageMessage(compressed, 'me');
+        addImageMessage(compressed, 'me', id);
       }catch(err){
-        showToast('Rasmni yuborishda xatolik yuz berdi.');
+        showToast(t('toast.imageSendError'));
       }finally{
         imgBtn.disabled = false;
         imgBtn.textContent = '📷';
