@@ -20,9 +20,35 @@ app.use(express.static(path.join(__dirname, 'public')));
  * Hech qanday xabar matni serverda saqlanmaydi, faqat shifrlangan holda
  * bir foydalanuvchidan ikkinchisiga uzatiladi (relay).
  *
- * rooms: Map<roomName, { authHash: string, members: Set<socketId> }>
+ * rooms: Map<roomName, {
+ *   authHash: string,
+ *   members: Set<socketId>,
+ *   creatorId: string,        // xonani birinchi yaratgan socket
+ *   lastNotifiedAt: number    // Telegram spam bo'lmasligi uchun cooldown
+ * }>
  */
 const rooms = new Map();
+
+// Telegram bildirishnomasi (ixtiyoriy). Render'da Environment bo'limida
+// TELEGRAM_BOT_TOKEN va TELEGRAM_CHAT_ID o'zgaruvchilarini qo'shsangiz ishlaydi.
+// Agar sozlanmagan bo'lsa, bu funksiya jim o'tkazib yuboradi — hech narsa buzilmaydi.
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const NOTIFY_COOLDOWN_MS = 60 * 1000; // xona uchun 1 daqiqada max 1 marta
+
+async function notifyCreatorViaTelegram(roomName){
+  if(!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+  try{
+    const text = `🔔 Secure Line: "${roomName}" xonasida yangi xabar bor. Matn shifrlangani uchun bu yerda ko'rsatilmaydi — saytga kirib ko'ring.`;
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text })
+    });
+  }catch(err){
+    console.error('Telegram bildirishnoma yuborilmadi:', err.message);
+  }
+}
 
 function roomInfo(roomName) {
   return rooms.get(roomName);
@@ -46,8 +72,8 @@ io.on('connection', (socket) => {
     let r = rooms.get(roomName);
 
     if (!r) {
-      // Xona hali mavjud emas — shu foydalanuvchi uni yaratadi va parolni belgilaydi
-      r = { authHash, members: new Set() };
+      // Xona hali mavjud emas — shu foydalanuvchi uni yaratadi, u "creator" bo'ladi
+      r = { authHash, members: new Set(), creatorId: socket.id, lastNotifiedAt: 0 };
       rooms.set(roomName, r);
     }
 
@@ -69,9 +95,9 @@ io.on('connection', (socket) => {
     socket.emit('joined', { room: roomName, peers: r.members.size });
 
     if (r.members.size === 2) {
-      io.to(roomName).emit('system', { text: 'Suhbatdosh xonaga kirdi. Endi ikkalangiz ham ulangansiz.' });
+      io.to(roomName).emit('system', { key: 'both-connected' });
     } else {
-      socket.emit('system', { text: 'Xonaga muvaffaqiyatli kirdingiz. Suhbatdosh kutilmoqda...' });
+      socket.emit('system', { key: 'waiting' });
     }
   });
 
@@ -88,12 +114,32 @@ io.on('connection', (socket) => {
       ...payload,
       ts: Date.now()
     });
+
+    // Faqat "yaratuvchi bo'lmagan" tomon yozganda, "yaratuvchi"ga bildirishnoma boradi.
+    // Yaratuvchi yozganda hech kimga bildirishnoma yuborilmaydi.
+    if (socket.id !== r.creatorId) {
+      const now = Date.now();
+      if (now - r.lastNotifiedAt > NOTIFY_COOLDOWN_MS) {
+        r.lastNotifiedAt = now;
+        notifyCreatorViaTelegram(roomName);
+      }
+    }
   });
 
   socket.on('typing', (isTyping) => {
     const roomName = socket.data.room;
     if (!roomName) return;
     socket.to(roomName).emit('typing', !!isTyping);
+  });
+
+  // "O'qildi" belgisi: qabul qiluvchi xabarni ochgach, shu signalni jo'natuvchiga qaytaradi.
+  // Server bu yerda ham faqat ID'ni relay qiladi, xabar matnini bilmaydi.
+  socket.on('message-read', ({ id } = {}) => {
+    const roomName = socket.data.room;
+    if (!roomName || typeof id !== 'string') return;
+    const r = rooms.get(roomName);
+    if (!r || !r.members.has(socket.id)) return;
+    socket.to(roomName).emit('message-read', { id });
   });
 
   socket.on('disconnect', () => {
@@ -103,7 +149,7 @@ io.on('connection', (socket) => {
     if (!r) return;
 
     r.members.delete(socket.id);
-    socket.to(roomName).emit('system', { text: 'Suhbatdosh xonadan chiqib ketdi.' });
+    socket.to(roomName).emit('system', { key: 'partner-left' });
     cleanupRoomIfEmpty(roomName);
   });
 });
