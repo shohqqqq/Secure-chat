@@ -6,8 +6,8 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  // Xabar hajmini cheklaymiz — himoya uchun (ovozli xabarlar uchun biroz kattaroq)
-  maxHttpBufferSize: 6e6
+  // Xabar hajmini cheklaymiz — himoya uchun (ovozli xabar va rasm uchun kattaroq)
+  maxHttpBufferSize: 9e6
 });
 
 const PORT = process.env.PORT || 3000;
