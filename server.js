@@ -14,6 +14,11 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Frontend uchun ochiq (maxfiy bo'lmagan) sozlama — faqat bot username, token emas.
+app.get('/api/config', (req, res) => {
+  res.json({ telegramBotUsername: TELEGRAM_BOT_USERNAME });
+});
+
 /**
  * Xonalar faqat RAM'da saqlanadi. Server qayta ishga tushsa yoki
  * xona bo'shab qolsa (ikkala foydalanuvchi ham chiqsa) — butunlay o'chadi.
@@ -23,32 +28,68 @@ app.use(express.static(path.join(__dirname, 'public')));
  * rooms: Map<roomName, {
  *   authHash: string,
  *   members: Set<socketId>,
- *   creatorId: string,        // xonani birinchi yaratgan socket
- *   lastNotifiedAt: number    // Telegram spam bo'lmasligi uchun cooldown
+ *   creatorId: string,          // xonani birinchi yaratgan socket
+ *   creatorChatId: string|null, // yaratuvchining shaxsiy Telegram chat_id (ixtiyoriy)
+ *   lastNotifiedAt: number      // Telegram spam bo'lmasligi uchun cooldown
  * }>
  */
 const rooms = new Map();
 
-// Telegram bildirishnomasi (ixtiyoriy). Render'da Environment bo'limida
-// TELEGRAM_BOT_TOKEN va TELEGRAM_CHAT_ID o'zgaruvchilarini qo'shsangiz ishlaydi.
-// Agar sozlanmagan bo'lsa, bu funksiya jim o'tkazib yuboradi — hech narsa buzilmaydi.
+// Telegram bildirishnomasi (ixtiyoriy). Sayt bitta umumiy botga ega (TELEGRAM_BOT_TOKEN),
+// lekin har bir xona yaratuvchisi o'zining shaxsiy chat_id'ini kiritadi — shu sabab
+// bildirishnoma faqat o'sha odamga boradi, boshqa xonalarga aralashmaydi.
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || null;
 const NOTIFY_COOLDOWN_MS = 60 * 1000; // xona uchun 1 daqiqada max 1 marta
 
-async function notifyCreatorViaTelegram(roomName){
-  if(!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+async function notifyCreatorViaTelegram(roomName, chatId){
+  if(!TELEGRAM_BOT_TOKEN || !chatId) return;
   try{
     const text = `🔔 Secure Line: "${roomName}" xonasida yangi xabar bor. Matn shifrlangani uchun bu yerda ko'rsatilmaydi — saytga kirib ko'ring.`;
     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text })
+      body: JSON.stringify({ chat_id: chatId, text })
     });
   }catch(err){
     console.error('Telegram bildirishnoma yuborilmadi:', err.message);
   }
 }
+
+// Foydalanuvchi o'z chat_id'ini bilishi uchun: botga /start yozsa,
+// bot shu odamning chat_id'ini avtomatik qaytarib beradi (qo'lda qidirish shart emas).
+async function startTelegramSelfServiceBot(){
+  if(!TELEGRAM_BOT_TOKEN) return;
+  let offset = 0;
+  const apiBase = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+
+  while(true){
+    try{
+      const res = await fetch(`${apiBase}/getUpdates?timeout=25&offset=${offset}`);
+      const json = await res.json();
+      if(json.ok && Array.isArray(json.result)){
+        for(const update of json.result){
+          offset = update.update_id + 1;
+          const msg = update.message;
+          if(msg && msg.chat && typeof msg.text === 'string'){
+            const chatId = msg.chat.id;
+            const reply = `👋 Sizning chat ID'ingiz: ${chatId}\n\nBuni "Secure Line" saytida xona yaratganda "Telegram Chat ID" maydoniga kiriting — shunda suhbatdoshingiz yozganda sizga shu yerga bildirishnoma keladi.`;
+            fetch(`${apiBase}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text: reply })
+            }).catch(() => {});
+          }
+        }
+      }
+    }catch(err){
+      console.error('Telegram polling xatosi:', err.message);
+      await new Promise(r => setTimeout(r, 5000));
+    }
+  }
+}
+
+startTelegramSelfServiceBot();
 
 function roomInfo(roomName) {
   return rooms.get(roomName);
@@ -62,7 +103,7 @@ function cleanupRoomIfEmpty(roomName) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('join-room', ({ room, authHash }) => {
+  socket.on('join-room', ({ room, authHash, notifyChatId }) => {
     if (typeof room !== 'string' || typeof authHash !== 'string' || !room.trim() || !authHash.trim()) {
       socket.emit('join-error', { reason: 'invalid', message: 'Xona nomi yoki parol noto\'g\'ri formatda.' });
       return;
@@ -72,8 +113,10 @@ io.on('connection', (socket) => {
     let r = rooms.get(roomName);
 
     if (!r) {
-      // Xona hali mavjud emas — shu foydalanuvchi uni yaratadi, u "creator" bo'ladi
-      r = { authHash, members: new Set(), creatorId: socket.id, lastNotifiedAt: 0 };
+      // Xona hali mavjud emas — shu foydalanuvchi uni yaratadi, u "creator" bo'ladi.
+      // Agar u o'zining Telegram chat_id'ini kiritgan bo'lsa, shu yerga saqlanadi.
+      const cleanChatId = (typeof notifyChatId === 'string' && notifyChatId.trim()) ? notifyChatId.trim() : null;
+      r = { authHash, members: new Set(), creatorId: socket.id, creatorChatId: cleanChatId, lastNotifiedAt: 0 };
       rooms.set(roomName, r);
     }
 
@@ -115,13 +158,14 @@ io.on('connection', (socket) => {
       ts: Date.now()
     });
 
-    // Faqat "yaratuvchi bo'lmagan" tomon yozganda, "yaratuvchi"ga bildirishnoma boradi.
-    // Yaratuvchi yozganda hech kimga bildirishnoma yuborilmaydi.
-    if (socket.id !== r.creatorId) {
+    // Faqat "yaratuvchi bo'lmagan" tomon yozganda, "yaratuvchi"ga bildirishnoma boradi
+    // (agar u o'zining Telegram chat_id'ini bergan bo'lsa). Yaratuvchi yozganda hech
+    // kimga bildirishnoma yuborilmaydi, va boshqa xonalarga bu umuman aralashmaydi.
+    if (socket.id !== r.creatorId && r.creatorChatId) {
       const now = Date.now();
       if (now - r.lastNotifiedAt > NOTIFY_COOLDOWN_MS) {
         r.lastNotifiedAt = now;
-        notifyCreatorViaTelegram(roomName);
+        notifyCreatorViaTelegram(roomName, r.creatorChatId);
       }
     }
   });
