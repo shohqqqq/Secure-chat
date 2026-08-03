@@ -366,6 +366,10 @@
       <label for="passInput" data-i18n="passLabel">Maxfiy parol</label>
       <input type="password" id="passInput" data-i18n-placeholder="passPlaceholder" placeholder="ikkalangiz ham biladigan parol" autocomplete="off">
 
+      <label for="notifyInput" data-i18n="notifyLabel">Telegram Chat ID (ixtiyoriy)</label>
+      <input type="text" id="notifyInput" data-i18n-placeholder="notifyPlaceholder" placeholder="masalan: 123456789" autocomplete="off" inputmode="numeric">
+      <div class="foot-note" id="botHelpNote" style="display:none; text-align:left; margin-top:8px;"></div>
+
       <button class="btn" id="joinBtn" data-i18n="joinBtn">Xonaga kirish</button>
       <div class="error-msg" id="errorBox"></div>
 
@@ -433,6 +437,9 @@
         joinBtn: 'Xonaga kirish',
         joiningBtn: 'Ulanmoqda...',
         footNote: "🔒 Kalit brauzeringizdan hech qachon chiqmaydi",
+        notifyLabel: 'Telegram Chat ID (ixtiyoriy)',
+        notifyPlaceholder: 'masalan: 123456789',
+        botHelp: (username) => `📩 Suhbatdosh yozganda bildirishnoma olish uchun @${username} botiga /start yozing — u sizga chat ID'ingizni yuboradi.`,
         leaveBtn: 'Chiqish',
         msgPlaceholder: 'Xabar yozing...',
         typingIndicator: 'suhbatdosh yozmoqda...',
@@ -471,6 +478,9 @@
         joinBtn: 'Войти в комнату',
         joiningBtn: 'Подключение...',
         footNote: '🔒 Ключ никогда не покидает ваш браузер',
+        notifyLabel: 'Telegram Chat ID (необязательно)',
+        notifyPlaceholder: 'например: 123456789',
+        botHelp: (username) => `📩 Чтобы получать уведомления, когда собеседник пишет, напишите /start боту @${username} — он пришлёт ваш chat ID.`,
         leaveBtn: 'Выйти',
         msgPlaceholder: 'Напишите сообщение...',
         typingIndicator: 'собеседник печатает...',
@@ -509,6 +519,9 @@
         joinBtn: 'Enter room',
         joiningBtn: 'Connecting...',
         footNote: '🔒 The key never leaves your browser',
+        notifyLabel: 'Telegram Chat ID (optional)',
+        notifyPlaceholder: 'e.g. 123456789',
+        botHelp: (username) => `📩 To get notified when your partner writes, message /start to @${username} — it will send you your chat ID.`,
         leaveBtn: 'Leave',
         msgPlaceholder: 'Type a message...',
         typingIndicator: 'your partner is typing...',
@@ -563,7 +576,29 @@
       document.querySelectorAll('.lang-switch button').forEach(b => {
         b.classList.toggle('active', b.dataset.lang === currentLang);
       });
+      renderBotHelp();
     }
+
+    let telegramBotUsername = null;
+    function renderBotHelp(){
+      if(!telegramBotUsername){
+        botHelpNote.style.display = 'none';
+        return;
+      }
+      const fn = translations[currentLang].botHelp;
+      botHelpNote.textContent = typeof fn === 'function' ? fn(telegramBotUsername) : '';
+      botHelpNote.style.display = 'block';
+    }
+
+    fetch('/api/config')
+      .then(r => r.json())
+      .then(cfg => {
+        if(cfg && cfg.telegramBotUsername){
+          telegramBotUsername = cfg.telegramBotUsername;
+          renderBotHelp();
+        }
+      })
+      .catch(() => {});
 
     function setLanguage(lang){
       if(!translations[lang]) return;
@@ -579,6 +614,8 @@
     const chatScreen = document.getElementById('chatScreen');
     const roomInput = document.getElementById('roomInput');
     const passInput = document.getElementById('passInput');
+    const notifyInput = document.getElementById('notifyInput');
+    const botHelpNote = document.getElementById('botHelpNote');
     const joinBtn = document.getElementById('joinBtn');
     const errorBox = document.getElementById('errorBox');
     const dotA = document.getElementById('dotA');
@@ -785,7 +822,8 @@
         cryptoKey = await deriveKey(password, room);
         const hash = await authHashFor(password, room);
         currentRoom = room;
-        socket.emit('join-room', { room, authHash: hash });
+        const notifyChatId = notifyInput.value.trim() || null;
+        socket.emit('join-room', { room, authHash: hash, notifyChatId });
       }catch(err){
         showError(t('errors.unexpected'));
         joinBtn.disabled = false;
