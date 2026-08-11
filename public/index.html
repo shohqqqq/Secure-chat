@@ -183,6 +183,45 @@
   }
   .leave-btn:hover{color:var(--danger); border-color:rgba(248,113,113,.4);}
 
+  .call-btn{
+    background:none; border:1px solid var(--border); color:var(--teal);
+    font-family:var(--mono); font-size:15px; padding:6px 10px; border-radius:8px; cursor:pointer;
+    transition:background .2s, border-color .2s;
+  }
+  .call-btn:hover{ background:rgba(45,214,196,.12); border-color:var(--teal); }
+  .call-btn.active-call{ color:var(--danger); border-color:rgba(248,113,113,.4); animation:pulse 1.4s infinite; }
+
+  .call-overlay{
+    position:fixed; inset:0; background:rgba(6,8,13,.94);
+    display:flex; align-items:center; justify-content:center;
+    z-index:1100; padding:24px; opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  .call-overlay.show{ opacity:1; pointer-events:auto; }
+  .call-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:20px;
+    padding:36px 30px; text-align:center; max-width:320px; width:100%;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .call-avatar{
+    width:74px; height:74px; border-radius:50%; margin:0 auto 18px;
+    background:linear-gradient(135deg, var(--violet), var(--teal));
+    display:flex; align-items:center; justify-content:center; font-size:30px;
+    animation:pulse 1.6s infinite;
+  }
+  .call-status-text{ font-family:var(--mono); font-size:13.5px; color:var(--text); margin-bottom:6px; }
+  .call-duration{ font-family:var(--mono); font-size:12px; color:var(--muted); margin-bottom:24px; }
+  .call-actions{ display:flex; gap:14px; justify-content:center; }
+  .call-action-btn{
+    width:56px; height:56px; border-radius:50%; border:none; cursor:pointer;
+    font-size:22px; display:flex; align-items:center; justify-content:center;
+    transition:transform .15s;
+  }
+  .call-action-btn:active{ transform:scale(.92); }
+  .call-accept{ background:linear-gradient(120deg, var(--violet), var(--teal)); }
+  .call-decline, .call-end{ background:var(--danger); }
+  .call-mute{ background:var(--surface-2); border:1px solid var(--border) !important; color:var(--text); }
+  .call-mute.muted{ background:rgba(248,113,113,.15); border-color:var(--danger) !important; color:var(--danger); }
+
   .messages{
     flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:10px;
     scroll-behavior:smooth;
@@ -387,6 +426,7 @@
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <span class="lock-badge">🔒 AES-256</span>
+          <button class="call-btn" id="callBtn" aria-label="Qo'ng'iroq">📞</button>
           <button class="leave-btn" id="leaveBtn" data-i18n="leaveBtn">Chiqish</button>
         </div>
       </div>
@@ -421,6 +461,17 @@
     <img id="lightboxImg" src="" alt="">
   </div>
 
+  <div class="call-overlay" id="callOverlay">
+    <div class="call-card">
+      <div class="call-avatar">📞</div>
+      <div class="call-status-text" id="callStatusText">...</div>
+      <div class="call-duration" id="callDuration"></div>
+      <div class="call-actions" id="callActions"></div>
+    </div>
+  </div>
+
+  <audio id="remoteAudio" autoplay></audio>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
@@ -445,6 +496,16 @@
         typingIndicator: 'suhbatdosh yozmoqda...',
         recLabel: 'Yozib olinmoqda...',
         cancelRecord: 'Bekor qilish',
+        call: {
+          calling: "Qo'ng'iroq qilinmoqda...",
+          incoming: 'Kiruvchi qo\'ng\'iroq...',
+          inCall: "Qo'ng'iroqda",
+          connecting: 'Ulanmoqda...',
+          ended: "Qo'ng'iroq tugadi",
+          declined: 'Qo\'ng\'iroq rad etildi',
+          noAnswer: 'Javob berilmadi',
+          micNeeded: "Qo'ng'iroq uchun mikrofonga ruxsat kerak."
+        },
         errors: {
           invalid: "Xona nomi yoki parol noto'g'ri formatda.",
           wrongPassword: "Parol noto'g'ri.",
@@ -486,6 +547,16 @@
         typingIndicator: 'собеседник печатает...',
         recLabel: 'Идёт запись...',
         cancelRecord: 'Отменить',
+        call: {
+          calling: 'Звоним...',
+          incoming: 'Входящий звонок...',
+          inCall: 'В звонке',
+          connecting: 'Подключение...',
+          ended: 'Звонок завершён',
+          declined: 'Звонок отклонён',
+          noAnswer: 'Нет ответа',
+          micNeeded: 'Для звонка нужен доступ к микрофону.'
+        },
         errors: {
           invalid: 'Неверный формат названия комнаты или пароля.',
           wrongPassword: 'Неверный пароль.',
@@ -527,6 +598,16 @@
         typingIndicator: 'your partner is typing...',
         recLabel: 'Recording...',
         cancelRecord: 'Cancel',
+        call: {
+          calling: 'Calling...',
+          incoming: 'Incoming call...',
+          inCall: 'In call',
+          connecting: 'Connecting...',
+          ended: 'Call ended',
+          declined: 'Call declined',
+          noAnswer: 'No answer',
+          micNeeded: 'Microphone access is needed for calls.'
+        },
         errors: {
           invalid: 'Invalid room name or password format.',
           wrongPassword: 'Incorrect password.',
@@ -637,6 +718,12 @@
     const imgFileInput = document.getElementById('imgFileInput');
     const lightbox = document.getElementById('lightbox');
     const lightboxImg = document.getElementById('lightboxImg');
+    const callBtn = document.getElementById('callBtn');
+    const callOverlay = document.getElementById('callOverlay');
+    const callStatusText = document.getElementById('callStatusText');
+    const callDuration = document.getElementById('callDuration');
+    const callActions = document.getElementById('callActions');
+    const remoteAudio = document.getElementById('remoteAudio');
 
     let cryptoKey = null;
     let currentRoom = null;
@@ -1112,6 +1199,190 @@
         imgBtn.disabled = false;
         imgBtn.textContent = '📷';
       }
+    });
+
+    // ---------- Ovozli qo'ng'iroq (WebRTC) ----------
+    const RTC_CONFIG = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+
+    let pc = null;
+    let localStream = null;
+    let callState = 'idle'; // idle | calling | incoming | active
+    let callTimerInterval = null;
+    let callStartTime = null;
+    let isMuted = false;
+
+    function setCallOverlay(statusKey, actionsHtml){
+      callStatusText.textContent = t(statusKey);
+      callActions.innerHTML = actionsHtml;
+      callOverlay.classList.add('show');
+    }
+    function hideCallOverlay(){
+      callOverlay.classList.remove('show');
+      callDuration.textContent = '';
+    }
+
+    function startCallTimer(){
+      callStartTime = Date.now();
+      callTimerInterval = setInterval(() => {
+        callDuration.textContent = formatTime(Date.now() - callStartTime);
+      }, 500);
+    }
+    function stopCallTimer(){
+      clearInterval(callTimerInterval);
+      callTimerInterval = null;
+    }
+
+    function cleanupCall(){
+      if(pc){ pc.close(); pc = null; }
+      if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+      stopCallTimer();
+      hideCallOverlay();
+      callBtn.classList.remove('active-call');
+      callState = 'idle';
+      isMuted = false;
+    }
+
+    function createPeerConnection(){
+      const conn = new RTCPeerConnection(RTC_CONFIG);
+      conn.onicecandidate = (e) => {
+        if(e.candidate) socket.emit('call-ice-candidate', { candidate: e.candidate });
+      };
+      conn.ontrack = (e) => {
+        remoteAudio.srcObject = e.streams[0];
+      };
+      conn.onconnectionstatechange = () => {
+        if(conn.connectionState === 'connected' && callState !== 'active'){
+          callState = 'active';
+          callBtn.classList.add('active-call');
+          setCallOverlay('call.inCall', activeCallActionsHtml());
+          bindActiveCallButtons();
+          startCallTimer();
+        }
+        if(['disconnected','failed','closed'].includes(conn.connectionState)){
+          if(callState !== 'idle') endCall(true);
+        }
+      };
+      return conn;
+    }
+
+    function activeCallActionsHtml(){
+      return `
+        <button class="call-action-btn call-mute" id="muteBtn">🎤</button>
+        <button class="call-action-btn call-end" id="endCallBtn">📵</button>
+      `;
+    }
+    function bindActiveCallButtons(){
+      const muteBtn = document.getElementById('muteBtn');
+      const endCallBtn = document.getElementById('endCallBtn');
+      if(muteBtn) muteBtn.addEventListener('click', toggleMute);
+      if(endCallBtn) endCallBtn.addEventListener('click', () => endCall());
+    }
+    function toggleMute(){
+      if(!localStream) return;
+      isMuted = !isMuted;
+      localStream.getAudioTracks().forEach(tr => tr.enabled = !isMuted);
+      const muteBtn = document.getElementById('muteBtn');
+      if(muteBtn){
+        muteBtn.classList.toggle('muted', isMuted);
+        muteBtn.textContent = isMuted ? '🔇' : '🎤';
+      }
+    }
+
+    async function startOutgoingCall(){
+      if(!cryptoKey){ showToast(t('toast.connectFirst')); return; }
+      if(callState !== 'idle') return;
+      try{
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }catch(err){
+        showToast(t('call.micNeeded'));
+        return;
+      }
+      callState = 'calling';
+      callBtn.classList.add('active-call');
+      setCallOverlay('call.calling', `<button class="call-action-btn call-end" id="cancelCallBtn">📵</button>`);
+      document.getElementById('cancelCallBtn').addEventListener('click', () => endCall());
+
+      pc = createPeerConnection();
+      localStream.getTracks().forEach(tr => pc.addTrack(tr, localStream));
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('call-offer', { sdp: pc.localDescription });
+    }
+
+    async function acceptIncomingCall(offerSdp){
+      try{
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }catch(err){
+        showToast(t('call.micNeeded'));
+        socket.emit('call-reject', {});
+        cleanupCall();
+        return;
+      }
+      pc = createPeerConnection();
+      await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
+      localStream.getTracks().forEach(tr => pc.addTrack(tr, localStream));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit('call-answer', { sdp: pc.localDescription });
+      setCallOverlay('call.connecting', '');
+    }
+
+    function endCall(silent){
+      if(callState === 'idle') return;
+      if(!silent) socket.emit('call-end', {});
+      cleanupCall();
+    }
+
+    callBtn.addEventListener('click', () => {
+      if(callState === 'active' || callState === 'calling'){
+        endCall();
+      }else if(callState === 'idle'){
+        startOutgoingCall();
+      }
+    });
+
+    socket.on('call-offer', async ({ sdp }) => {
+      if(callState !== 'idle'){
+        socket.emit('call-reject', {});
+        return;
+      }
+      callState = 'incoming';
+      callBtn.classList.add('active-call');
+      const acceptHtml = `
+        <button class="call-action-btn call-decline" id="declineCallBtn">📵</button>
+        <button class="call-action-btn call-accept" id="acceptCallBtn">📞</button>
+      `;
+      setCallOverlay('call.incoming', acceptHtml);
+      document.getElementById('declineCallBtn').addEventListener('click', () => {
+        socket.emit('call-reject', {});
+        cleanupCall();
+      });
+      document.getElementById('acceptCallBtn').addEventListener('click', () => acceptIncomingCall(sdp));
+    });
+
+    socket.on('call-answer', async ({ sdp }) => {
+      if(!pc) return;
+      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    });
+
+    socket.on('call-ice-candidate', async ({ candidate }) => {
+      if(!pc || !candidate) return;
+      try{ await pc.addIceCandidate(new RTCIceCandidate(candidate)); }catch(err){}
+    });
+
+    socket.on('call-reject', () => {
+      showToast(t('call.declined'));
+      cleanupCall();
+    });
+
+    socket.on('call-end', () => {
+      showToast(t('call.ended'));
+      cleanupCall();
     });
   </script>
 </body>
