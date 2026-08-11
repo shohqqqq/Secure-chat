@@ -186,6 +186,22 @@ io.on('connection', (socket) => {
     socket.to(roomName).emit('message-read', { id });
   });
 
+  // Ovozli qo'ng'iroq signalizatsiyasi (WebRTC). Server faqat "pochtachi" —
+  // SDP/ICE ma'lumotlarini ikkinchi tomonga uzatadi, ovozning o'zi hech qachon
+  // serverdan o'tmaydi (brauzerlar to'g'ridan-to'g'ri ulanadi).
+  function relayToRoom(socket, event, payload){
+    const roomName = socket.data.room;
+    if (!roomName) return;
+    const r = rooms.get(roomName);
+    if (!r || !r.members.has(socket.id)) return;
+    socket.to(roomName).emit(event, payload);
+  }
+  socket.on('call-offer', (payload) => relayToRoom(socket, 'call-offer', payload));
+  socket.on('call-answer', (payload) => relayToRoom(socket, 'call-answer', payload));
+  socket.on('call-ice-candidate', (payload) => relayToRoom(socket, 'call-ice-candidate', payload));
+  socket.on('call-end', (payload) => relayToRoom(socket, 'call-end', payload));
+  socket.on('call-reject', (payload) => relayToRoom(socket, 'call-reject', payload));
+
   socket.on('disconnect', () => {
     const roomName = socket.data.room;
     if (!roomName) return;
@@ -194,6 +210,7 @@ io.on('connection', (socket) => {
 
     r.members.delete(socket.id);
     socket.to(roomName).emit('system', { key: 'partner-left' });
+    socket.to(roomName).emit('call-end', {});
     cleanupRoomIfEmpty(roomName);
   });
 });
