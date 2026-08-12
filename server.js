@@ -19,6 +19,28 @@ app.get('/api/config', (req, res) => {
   res.json({ telegramBotUsername: TELEGRAM_BOT_USERNAME });
 });
 
+// Shaxsiy TURN server (metered.ca, oyiga 50GB gacha bepul) uchun sozlama.
+// METERED_API_KEY va METERED_DOMAIN Render'ning Environment bo'limida saqlanadi —
+// kalit hech qachon brauzerga to'g'ridan-to'g'ri berilmaydi, faqat shu endpoint orqali
+// har safar yangi, vaqtinchalik TURN login ma'lumotlari so'raladi.
+const METERED_API_KEY = process.env.METERED_API_KEY;
+const METERED_DOMAIN = process.env.METERED_DOMAIN; // masalan: yourapp.metered.live
+
+app.get('/api/turn-credentials', async (req, res) => {
+  if (!METERED_API_KEY || !METERED_DOMAIN) {
+    return res.json({ iceServers: null }); // sozlanmagan — frontend bepul TURN'ga qaytadi
+  }
+  try {
+    const url = `https://${METERED_DOMAIN}/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`;
+    const r = await fetch(url);
+    const iceServers = await r.json();
+    res.json({ iceServers });
+  } catch (err) {
+    console.error('TURN kalitlarini olishda xatolik:', err.message);
+    res.json({ iceServers: null });
+  }
+});
+
 /**
  * Xonalar faqat RAM'da saqlanadi. Server qayta ishga tushsa yoki
  * xona bo'shab qolsa (ikkala foydalanuvchi ham chiqsa) — butunlay o'chadi.
