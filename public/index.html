@@ -1202,12 +1202,28 @@
     });
 
     // ---------- Ovozli qo'ng'iroq (WebRTC) ----------
-    const RTC_CONFIG = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    };
+    // STUN — ikkala tomon to'g'ridan-to'g'ri ulanishga harakat qiladi (tez, bepul).
+    // TURN — agar to'g'ridan-to'g'ri ulanish imkonsiz bo'lsa, ovoz shu vositachi orqali
+    // "aylanma yo'l" bilan o'tadi. Avval shaxsiy TURN (agar sozlangan bo'lsa) so'raladi,
+    // sozlanmagan bo'lsa — ochiq (bepul, umumiy) demo TURN xizmatiga qaytiladi.
+    const FALLBACK_ICE_SERVERS = [
+      { urls: 'stun:stun.relay.metered.ca:80' },
+      { urls: 'turn:global.relay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:global.relay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:global.relay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+    ];
+
+    let RTC_CONFIG = { iceServers: FALLBACK_ICE_SERVERS };
+
+    fetch('/api/turn-credentials')
+      .then(r => r.json())
+      .then(cfg => {
+        if(cfg && Array.isArray(cfg.iceServers) && cfg.iceServers.length){
+          RTC_CONFIG = { iceServers: cfg.iceServers };
+        }
+      })
+      .catch(() => { /* jim — bepul TURN ishlatiladi */ });
 
     let pc = null;
     let localStream = null;
