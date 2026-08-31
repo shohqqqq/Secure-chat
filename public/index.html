@@ -8,23 +8,24 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0b0e14;
-    --surface:#121622;
-    --surface-2:#191f2e;
-    --border:#232b3d;
-    --text:#e7e9ee;
-    --muted:#7b8496;
-    --violet:#8b5cf6;
-    --teal:#2dd6c4;
-    --danger:#f87171;
+    --bg:#070907;
+    --surface:#0f130f;
+    --surface-2:#141a14;
+    --border:rgba(34,197,94,.25);
+    --text:#eafdf0;
+    --muted:#7a8a7d;
+    --violet:#16a34a;
+    --teal:#4ade80;
+    --danger:#ff5c7a;
     --mono: 'JetBrains Mono', monospace;
     --sans: 'Inter', sans-serif;
+    --glass-blur: blur(22px) saturate(160%);
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
     background:
-      radial-gradient(circle at 20% 0%, rgba(139,92,246,0.10), transparent 45%),
-      radial-gradient(circle at 85% 100%, rgba(45,214,196,0.08), transparent 45%),
+      radial-gradient(circle at 20% 0%, rgba(34,197,94,0.10), transparent 45%),
+      radial-gradient(circle at 85% 100%, rgba(34,197,94,0.06), transparent 45%),
       var(--bg);
     color:var(--text);
     font-family:var(--sans);
@@ -57,9 +58,9 @@
   .card{
     background:var(--surface);
     border:1px solid var(--border);
-    border-radius:16px;
+    border-radius:14px;
     padding:32px 28px;
-    box-shadow:0 20px 60px rgba(0,0,0,.4);
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
   }
   .lang-switch{
     display:flex; justify-content:flex-end; gap:6px; margin-bottom:18px;
@@ -71,7 +72,7 @@
   }
   .lang-switch button.active{
     background:linear-gradient(120deg, var(--violet), var(--teal));
-    color:#0b0e14; border-color:transparent; font-weight:700;
+    color:#070907; border-color:transparent; font-weight:700;
   }
   .eyebrow{
     font-family:var(--mono);
@@ -115,17 +116,18 @@
     margin-top:26px;
     padding:14px;
     border:none;
-    border-radius:10px;
+    border-radius:12px;
     background:linear-gradient(120deg, var(--violet), var(--teal));
-    color:#0b0e14;
+    color:#070907;
     font-family:var(--mono);
     font-weight:700;
     font-size:14px;
     letter-spacing:.5px;
     cursor:pointer;
-    transition:transform .15s, opacity .15s;
+    transition:transform .15s, opacity .15s, box-shadow .2s;
+    box-shadow:0 8px 24px rgba(139,123,255,.35);
   }
-  .btn:hover{transform:translateY(-1px);}
+  .btn:hover{transform:translateY(-1px); box-shadow:0 10px 30px rgba(75,227,214,.45);}
   .btn:active{transform:translateY(0);}
   .btn:disabled{opacity:.5; cursor:not-allowed; transform:none;}
   .error-msg{
@@ -155,11 +157,11 @@
     max-height:820px;
     background:var(--surface);
     border:1px solid var(--border);
-    border-radius:16px;
+    border-radius:14px;
     display:flex;
     flex-direction:column;
     overflow:hidden;
-    box-shadow:0 20px 60px rgba(0,0,0,.4);
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
   }
   .chat-header{
     padding:16px 18px;
@@ -171,11 +173,12 @@
     font-family:var(--mono); font-weight:600; font-size:14px;
     display:flex; align-items:center; gap:8px;
   }
-  .status-dot{width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 8px rgba(45,214,196,.7); animation:pulse 1.6s infinite;}
+  .status-dot{width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 8px rgba(75,227,214,.7); animation:pulse 1.6s infinite;}
   .lock-badge{
     font-family:var(--mono); font-size:11px; color:var(--teal);
-    border:1px solid rgba(45,214,196,.35); padding:4px 9px; border-radius:20px;
+    border:1px solid rgba(75,227,214,.35); padding:4px 9px; border-radius:20px;
     display:flex; align-items:center; gap:5px;
+    background:rgba(75,227,214,.08);
   }
   .leave-btn{
     background:none; border:1px solid var(--border); color:var(--muted);
@@ -198,7 +201,8 @@
   }
   .call-overlay.show{ opacity:1; pointer-events:auto; }
   .call-card{
-    background:var(--surface); border:1px solid var(--border); border-radius:20px;
+    background:var(--surface);
+    border:1px solid var(--border); border-radius:16px;
     padding:36px 30px; text-align:center; max-width:320px; width:100%;
     box-shadow:0 20px 60px rgba(0,0,0,.5);
   }
@@ -245,10 +249,11 @@
   @keyframes rise{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
   .msg.me{
     align-self:flex-end;
-    background:linear-gradient(135deg, rgba(139,92,246,.9), rgba(45,214,196,.75));
-    color:#0b0e14;
+    background:linear-gradient(135deg, rgba(139,123,255,.85), rgba(75,227,214,.75));
+    color:#070907;
     border-bottom-right-radius:4px;
     font-weight:500;
+    box-shadow:0 4px 16px rgba(139,123,255,.25);
   }
   .msg.them{
     align-self:flex-start;
@@ -366,6 +371,50 @@
   }
   audio::-webkit-media-controls-panel{ background-color:#0f1420; }
 
+  /* ---------- Hamburger menu + drawer ---------- */
+  .hamburger-btn{
+    position:fixed; top:16px; left:16px; z-index:900;
+    width:42px; height:42px; border-radius:10px;
+    background:var(--surface); border:1px solid var(--border); color:var(--text);
+    font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .drawer-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.6);
+    z-index:950; opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  .drawer-overlay.show{ opacity:1; pointer-events:auto; }
+  .drawer{
+    position:fixed; top:0; left:0; bottom:0; width:280px; max-width:85vw;
+    background:var(--surface); border-right:1px solid var(--border);
+    z-index:960; padding:22px 18px; display:flex; flex-direction:column;
+    transform:translateX(-100%); transition:transform .25s ease;
+  }
+  .drawer.show{ transform:translateX(0); }
+  .drawer-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; }
+  .drawer-title{ display:flex; align-items:center; gap:10px; font-family:var(--mono); font-weight:700; font-size:16px; }
+  .drawer-title .shield{ font-size:20px; }
+  .drawer-close{ background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; }
+  .drawer-nav{ display:flex; flex-direction:column; gap:4px; }
+  .drawer-item{
+    display:flex; align-items:center; gap:12px;
+    padding:11px 12px; border-radius:10px; border:1px solid transparent;
+    background:none; color:var(--text); font-family:var(--sans); font-size:14.5px;
+    cursor:pointer; text-align:left; width:100%;
+  }
+  .drawer-item .icon{ font-size:16px; width:20px; text-align:center; }
+  .drawer-item.active{
+    background:linear-gradient(120deg, rgba(22,163,74,.22), rgba(74,222,128,.14));
+    border-color:rgba(74,222,128,.4);
+  }
+  .drawer-item:hover:not(.active){ background:var(--surface-2); }
+  .drawer-status{
+    margin-top:auto; border:1px solid var(--border); border-radius:12px;
+    padding:12px 14px; font-family:var(--mono); font-size:12px;
+  }
+  .drawer-status .status-title{ display:flex; align-items:center; gap:7px; color:var(--teal); font-weight:700; }
+  .drawer-status .status-sub{ color:var(--muted); margin-top:3px; }
+  .drawer-footer{ margin-top:14px; text-align:center; font-size:11px; color:var(--muted); }
+
   .toast{
     position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
     background:var(--surface-2); border:1px solid var(--border); color:var(--text);
@@ -381,6 +430,29 @@
 </style>
 </head>
 <body>
+
+  <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menyu">☰</button>
+
+  <div class="drawer-overlay" id="drawerOverlay"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-header">
+      <div class="drawer-title"><span class="shield">🛡️</span> Secure Line</div>
+      <button class="drawer-close" id="drawerCloseBtn">✕</button>
+    </div>
+    <div class="drawer-nav">
+      <button class="drawer-item active" data-action="home"><span class="icon">🏠</span> <span data-i18n="menuHome">Asosiy sahifa</span></button>
+      <button class="drawer-item" data-action="messages"><span class="icon">💬</span> <span data-i18n="menuMessages">Xabarlar</span></button>
+      <button class="drawer-item" data-action="profile"><span class="icon">👤</span> <span data-i18n="menuProfile">Profil</span></button>
+      <button class="drawer-item" data-action="settings"><span class="icon">⚙️</span> <span data-i18n="menuSettings">Sozlamalar</span></button>
+      <button class="drawer-item" data-action="help"><span class="icon">❓</span> <span data-i18n="menuHelp">Yordam</span></button>
+      <button class="drawer-item" data-action="logout"><span class="icon">🚪</span> <span data-i18n="menuLogout">Chiqish</span></button>
+    </div>
+    <div class="drawer-status">
+      <div class="status-title">🛡️ <span data-i18n="menuProtected">Himoya yoqilgan</span> <span style="color:var(--teal);">●</span></div>
+      <div class="status-sub" data-i18n="menuProtectedSub">Siz xavfsiz aloqadasiz</div>
+    </div>
+    <div class="drawer-footer">© Secure Line 2026</div>
+  </div>
 
   <!-- ============ JOIN SCREEN ============ -->
   <div class="screen" id="joinScreen">
@@ -448,7 +520,7 @@
         <button class="mic-btn" id="micBtn" aria-label="Ovozli xabar">🎤</button>
         <button class="send-btn" id="sendBtn" aria-label="Yuborish">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M3 11L21 3L13 21L11 13L3 11Z" fill="#0b0e14"/>
+            <path d="M3 11L21 3L13 21L11 13L3 11Z" fill="#070907"/>
           </svg>
         </button>
       </div>
@@ -496,6 +568,16 @@
         typingIndicator: 'suhbatdosh yozmoqda...',
         recLabel: 'Yozib olinmoqda...',
         cancelRecord: 'Bekor qilish',
+        menuHome: 'Asosiy sahifa',
+        menuMessages: 'Xabarlar',
+        menuProfile: 'Profil',
+        menuSettings: 'Sozlamalar',
+        menuHelp: 'Yordam',
+        menuLogout: 'Chiqish',
+        menuProtected: 'Himoya yoqilgan',
+        menuProtectedSub: 'Siz xavfsiz aloqadasiz',
+        menuProfileMsg: 'Bu sayt hisob talab qilmaydi — hammasi anonim va vaqtinchalik.',
+        menuHelpMsg: "Xona nomi va parolni kiriting, ikkalangiz kirgach suhbat boshlanadi. Sahifa yangilansa, hamma narsa o'chadi.",
         call: {
           calling: "Qo'ng'iroq qilinmoqda...",
           incoming: 'Kiruvchi qo\'ng\'iroq...',
@@ -547,6 +629,16 @@
         typingIndicator: 'собеседник печатает...',
         recLabel: 'Идёт запись...',
         cancelRecord: 'Отменить',
+        menuHome: 'Главная',
+        menuMessages: 'Сообщения',
+        menuProfile: 'Профиль',
+        menuSettings: 'Настройки',
+        menuHelp: 'Помощь',
+        menuLogout: 'Выйти',
+        menuProtected: 'Защита включена',
+        menuProtectedSub: 'Вы на связи безопасно',
+        menuProfileMsg: 'Этот сайт не требует аккаунта — всё анонимно и временно.',
+        menuHelpMsg: 'Введите название комнаты и пароль, чат начнётся, когда войдут оба. При обновлении страницы всё исчезает.',
         call: {
           calling: 'Звоним...',
           incoming: 'Входящий звонок...',
@@ -598,6 +690,16 @@
         typingIndicator: 'your partner is typing...',
         recLabel: 'Recording...',
         cancelRecord: 'Cancel',
+        menuHome: 'Home',
+        menuMessages: 'Messages',
+        menuProfile: 'Profile',
+        menuSettings: 'Settings',
+        menuHelp: 'Help',
+        menuLogout: 'Log out',
+        menuProtected: 'Protection enabled',
+        menuProtectedSub: "You're securely connected",
+        menuProfileMsg: 'This site needs no account — everything is anonymous and temporary.',
+        menuHelpMsg: 'Enter a room name and password — the chat starts once you both join. Refresh the page and everything disappears.',
         call: {
           calling: 'Calling...',
           incoming: 'Incoming call...',
@@ -1022,6 +1124,42 @@
 
     leaveBtn.addEventListener('click', () => {
       window.location.reload();
+    });
+
+    // ---------- Yon menyu (drawer) ----------
+    const hamburgerBtn = document.getElementById('hamburgerBtn');
+    const drawer = document.getElementById('drawer');
+    const drawerOverlay = document.getElementById('drawerOverlay');
+    const drawerCloseBtn = document.getElementById('drawerCloseBtn');
+
+    function openDrawer(){
+      drawer.classList.add('show');
+      drawerOverlay.classList.add('show');
+    }
+    function closeDrawer(){
+      drawer.classList.remove('show');
+      drawerOverlay.classList.remove('show');
+    }
+    hamburgerBtn.addEventListener('click', openDrawer);
+    drawerCloseBtn.addEventListener('click', closeDrawer);
+    drawerOverlay.addEventListener('click', closeDrawer);
+
+    document.querySelectorAll('.drawer-item').forEach(item => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.drawer-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        const action = item.dataset.action;
+        if(action === 'profile'){
+          showToast(t('menuProfileMsg'));
+        }else if(action === 'help'){
+          showToast(t('menuHelpMsg'));
+        }else if(action === 'logout'){
+          window.location.reload();
+          return;
+        }
+        // 'home', 'messages', 'settings' — hozircha shu ekranning o'zi, shunchaki menyuni yopadi
+        closeDrawer();
+      });
     });
 
     applyTranslations();
