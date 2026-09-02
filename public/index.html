@@ -829,6 +829,7 @@
 
     let cryptoKey = null;
     let currentRoom = null;
+    let myRole = null;
     let typingTimeout = null;
 
     // ---------- Ovozli xabar holati ----------
@@ -1037,13 +1038,37 @@
       hsLine.classList.remove('active');
     });
 
-    socket.on('joined', ({ room, peers }) => {
+    socket.on('joined', ({ room, peers, role }) => {
       joinScreen.classList.add('hidden');
       chatScreen.classList.remove('hidden');
       roomLabel.textContent = room;
+      myRole = role;
       dotA.classList.add('active');
       if(peers === 2) hsLine.classList.add('active');
       msgInput.focus();
+    });
+
+    socket.on('chat-history', async ({ messages, myRole: replayRole }) => {
+      if(!Array.isArray(messages)) return;
+      for(const payload of messages){
+        const who = payload.senderRole === replayRole ? 'me' : 'them';
+        try{
+          if(payload.type === 'audio'){
+            const iv = new Uint8Array(base64ToBuf(payload.iv));
+            const cipherBuf = base64ToBuf(payload.data);
+            const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, cryptoKey, cipherBuf);
+            addAudioMessage(new Blob([plainBuf], { type: payload.mime || 'audio/webm' }), who, payload.id);
+          } else if(payload.type === 'image'){
+            const iv = new Uint8Array(base64ToBuf(payload.iv));
+            const cipherBuf = base64ToBuf(payload.data);
+            const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, cryptoKey, cipherBuf);
+            addImageMessage(new Blob([plainBuf], { type: payload.mime || 'image/jpeg' }), who, payload.id);
+          } else {
+            const text = await decryptText(payload.iv, payload.data);
+            addMessage(text, who, payload.id);
+          }
+        }catch(err){ /* buzilgan yozuv — o'tkazib yuboriladi */ }
+      }
     });
 
     socket.on('system', ({ key }) => {
