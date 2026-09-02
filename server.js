@@ -42,20 +42,33 @@ app.get('/api/turn-credentials', async (req, res) => {
 });
 
 /**
- * Xonalar faqat RAM'da saqlanadi. Server qayta ishga tushsa yoki
- * xona bo'shab qolsa (ikkala foydalanuvchi ham chiqsa) — butunlay o'chadi.
- * Hech qanday xabar matni serverda saqlanmaydi, faqat shifrlangan holda
- * bir foydalanuvchidan ikkinchisiga uzatiladi (relay).
+ * Xonalar RAM'da saqlanadi (haqiqiy baza emas — server qayta ishga tushsa,
+ * masalan uzoq vaqt ishlatilmay qolib Render uni "uxlatib qo'ysa" yoki yangi
+ * kod joylashtirilsa — barcha tarix yo'qoladi).
+ *
+ * Endi xona ikkala kishi ham chiqib ketgandan so'ng DARHOL o'chirilmaydi —
+ * shu bilan bir xil xona nomi + parolni qayta kiritsangiz, avvalgi
+ * (shifrlangan) yozishmalar tiklanadi. Uzoq muddat ishlatilmagan xonalar
+ * xotirani band qilib qolmasligi uchun 7 kundan keyin avtomatik tozalanadi.
+ *
+ * Har bir xonada faqat 2 ta "rol" bor: A va B (kim birinchi bo'lsa, o'sha
+ * bo'sh rolni egallaydi). Bu shaxsni "eslab qolish" emas — shunchaki shu
+ * seansda kim qaysi tomonda ekanini bilish uchun, xabarlarni "men"/"u"
+ * qilib to'g'ri joylashtirish uchun ishlatiladi.
  *
  * rooms: Map<roomName, {
  *   authHash: string,
- *   members: Set<socketId>,
- *   creatorId: string,          // xonani birinchi yaratgan socket
- *   creatorChatId: string|null, // yaratuvchining shaxsiy Telegram chat_id (ixtiyoriy)
- *   lastNotifiedAt: number      // Telegram spam bo'lmasligi uchun cooldown
+ *   roleASocketId: string|null,
+ *   roleBSocketId: string|null,
+ *   creatorChatId: string|null,   // "A" rolidagi odamning Telegram chat_id'i (ixtiyoriy)
+ *   lastNotifiedAt: number,
+ *   history: Array<object>,       // shifrlangan xabarlar arxivi (server ularni o'qiy olmaydi)
+ *   lastActivity: number
  * }>
  */
 const rooms = new Map();
+const HISTORY_LIMIT = 500;
+const ROOM_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 kun ishlatilmasa, xona o'chadi
 
 // Telegram bildirishnomasi (ixtiyoriy). Sayt bitta umumiy botga ega (TELEGRAM_BOT_TOKEN),
 // lekin har bir xona yaratuvchisi o'zining shaxsiy chat_id'ini kiritadi — shu sabab
@@ -113,16 +126,31 @@ async function startTelegramSelfServiceBot(){
 
 startTelegramSelfServiceBot();
 
-function roomInfo(roomName) {
-  return rooms.get(roomName);
+function assignRole(r, socketId){
+  if (!r.roleASocketId) { r.roleASocketId = socketId; return 'A'; }
+  if (!r.roleBSocketId) { r.roleBSocketId = socketId; return 'B'; }
+  return null; // xona to'lgan
 }
 
-function cleanupRoomIfEmpty(roomName) {
-  const room = rooms.get(roomName);
-  if (room && room.members.size === 0) {
-    rooms.delete(roomName);
-  }
+function connectedCount(r){
+  return (r.roleASocketId ? 1 : 0) + (r.roleBSocketId ? 1 : 0);
 }
+
+function freeRole(r, socketId){
+  if (r.roleASocketId === socketId) r.roleASocketId = null;
+  if (r.roleBSocketId === socketId) r.roleBSocketId = null;
+}
+
+// Uzoq vaqt (7 kun) ishlatilmagan, hozir bo'sh turgan xonalarni tozalab turadi —
+// xotira cheksiz o'sib ketmasligi uchun.
+setInterval(() => {
+  const now = Date.now();
+  for (const [name, r] of rooms.entries()) {
+    if (connectedCount(r) === 0 && now - r.lastActivity > ROOM_EXPIRY_MS) {
+      rooms.delete(name);
+    }
+  }
+}, 60 * 60 * 1000);
 
 io.on('connection', (socket) => {
   socket.on('join-room', ({ room, authHash, notifyChatId }) => {
@@ -135,10 +163,17 @@ io.on('connection', (socket) => {
     let r = rooms.get(roomName);
 
     if (!r) {
-      // Xona hali mavjud emas — shu foydalanuvchi uni yaratadi, u "creator" bo'ladi.
-      // Agar u o'zining Telegram chat_id'ini kiritgan bo'lsa, shu yerga saqlanadi.
+      // Xona hali mavjud emas — shu foydalanuvchi uni yaratadi.
       const cleanChatId = (typeof notifyChatId === 'string' && notifyChatId.trim()) ? notifyChatId.trim() : null;
-      r = { authHash, members: new Set(), creatorId: socket.id, creatorChatId: cleanChatId, lastNotifiedAt: 0 };
+      r = {
+        authHash,
+        roleASocketId: null,
+        roleBSocketId: null,
+        creatorChatId: cleanChatId,
+        lastNotifiedAt: 0,
+        history: [],
+        lastActivity: Date.now()
+      };
       rooms.set(roomName, r);
     }
 
@@ -147,19 +182,33 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (r.members.size >= 2) {
+    const role = assignRole(r, socket.id);
+    if (!role) {
       socket.emit('join-error', { reason: 'full', message: 'Bu xona allaqachon 2 kishi bilan to\'lgan.' });
       return;
     }
 
-    // Muvaffaqiyatli kirish
-    r.members.add(socket.id);
+    // "A" rolidagi odam har safar qayta ulanganda o'zining Telegram chat_id'ini
+    // yangilashi mumkin (bo'sh qoldirsa, avvalgi qiymat saqlanib qoladi).
+    if (role === 'A' && typeof notifyChatId === 'string' && notifyChatId.trim()) {
+      r.creatorChatId = notifyChatId.trim();
+    }
+
     socket.join(roomName);
     socket.data.room = roomName;
+    socket.data.role = role;
+    r.lastActivity = Date.now();
 
-    socket.emit('joined', { room: roomName, peers: r.members.size });
+    const peers = connectedCount(r);
+    socket.emit('joined', { room: roomName, peers, role });
 
-    if (r.members.size === 2) {
+    // Avvalgi (shifrlangan) yozishmalar bo'lsa, shu foydalanuvchiga qayta ko'rsatiladi —
+    // server ularning mazmunini bilmaydi, faqat saqlab, qaytarib beradi.
+    if (r.history.length > 0) {
+      socket.emit('chat-history', { messages: r.history, myRole: role });
+    }
+
+    if (peers === 2) {
       io.to(roomName).emit('system', { key: 'both-connected' });
     } else {
       socket.emit('system', { key: 'waiting' });
@@ -167,23 +216,27 @@ io.on('connection', (socket) => {
   });
 
   // Shifrlangan xabarni (matn yoki ovozli) faqat relay qilamiz —
-  // server hech qachon asl mazmunni ko'rmaydi, faqat shifrlangan bloklarni uzatadi.
+  // server hech qachon asl mazmunni ko'rmaydi, faqat shifrlangan bloklarni uzatadi
+  // va (endi) shu xona tarixiga qo'shib qo'yadi, keyinroq qayta ko'rish uchun.
   socket.on('encrypted-message', (payload) => {
     const roomName = socket.data.room;
     if (!roomName) return;
     const r = rooms.get(roomName);
-    if (!r || !r.members.has(socket.id)) return;
+    if (!r || (r.roleASocketId !== socket.id && r.roleBSocketId !== socket.id)) return;
     if (!payload || typeof payload.iv !== 'string' || typeof payload.data !== 'string') return;
 
-    socket.to(roomName).emit('encrypted-message', {
-      ...payload,
-      ts: Date.now()
-    });
+    const stored = { ...payload, senderRole: socket.data.role, ts: Date.now() };
+    socket.to(roomName).emit('encrypted-message', stored);
 
-    // Faqat "yaratuvchi bo'lmagan" tomon yozganda, "yaratuvchi"ga bildirishnoma boradi
-    // (agar u o'zining Telegram chat_id'ini bergan bo'lsa). Yaratuvchi yozganda hech
-    // kimga bildirishnoma yuborilmaydi, va boshqa xonalarga bu umuman aralashmaydi.
-    if (socket.id !== r.creatorId && r.creatorChatId) {
+    r.history.push(stored);
+    if (r.history.length > HISTORY_LIMIT) {
+      r.history.splice(0, r.history.length - HISTORY_LIMIT);
+    }
+    r.lastActivity = Date.now();
+
+    // Faqat "A" bo'lmagan tomon ("B") yozganda, "A"ga bildirishnoma boradi
+    // (agar u o'zining Telegram chat_id'ini bergan bo'lsa).
+    if (socket.data.role === 'B' && r.creatorChatId) {
       const now = Date.now();
       if (now - r.lastNotifiedAt > NOTIFY_COOLDOWN_MS) {
         r.lastNotifiedAt = now;
@@ -204,7 +257,7 @@ io.on('connection', (socket) => {
     const roomName = socket.data.room;
     if (!roomName || typeof id !== 'string') return;
     const r = rooms.get(roomName);
-    if (!r || !r.members.has(socket.id)) return;
+    if (!r || (r.roleASocketId !== socket.id && r.roleBSocketId !== socket.id)) return;
     socket.to(roomName).emit('message-read', { id });
   });
 
@@ -215,7 +268,7 @@ io.on('connection', (socket) => {
     const roomName = socket.data.room;
     if (!roomName) return;
     const r = rooms.get(roomName);
-    if (!r || !r.members.has(socket.id)) return;
+    if (!r || (r.roleASocketId !== socket.id && r.roleBSocketId !== socket.id)) return;
     socket.to(roomName).emit(event, payload);
   }
   socket.on('call-offer', (payload) => relayToRoom(socket, 'call-offer', payload));
@@ -230,10 +283,12 @@ io.on('connection', (socket) => {
     const r = rooms.get(roomName);
     if (!r) return;
 
-    r.members.delete(socket.id);
+    freeRole(r, socket.id);
+    r.lastActivity = Date.now();
     socket.to(roomName).emit('system', { key: 'partner-left' });
     socket.to(roomName).emit('call-end', {});
-    cleanupRoomIfEmpty(roomName);
+    // Diqqat: xona bu yerda O'CHIRILMAYDI — tarix saqlanib qoladi, shu bilan
+    // xona nomi + parolni qayta kiritganda avvalgi yozishmalar tiklanadi.
   });
 });
 
