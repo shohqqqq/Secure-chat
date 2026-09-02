@@ -46,10 +46,10 @@
   .hs-dot{
     width:10px; height:10px; border-radius:50%;
     background:var(--muted);
-    box-shadow:0 0 0 rgba(45,214,196,0);
+    box-shadow:0 0 0 rgba(74,222,128,0);
     transition:background .3s;
   }
-  .hs-dot.active{background:var(--teal); box-shadow:0 0 12px rgba(45,214,196,.7); animation:pulse 1.6s infinite;}
+  .hs-dot.active{background:var(--teal); box-shadow:0 0 12px rgba(74,222,128,.7); animation:pulse 1.6s infinite;}
   .hs-line{width:60px; height:1px; background:linear-gradient(90deg,var(--muted),var(--muted));}
   .hs-line.active{background:linear-gradient(90deg,var(--teal),var(--violet)); height:2px;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
@@ -109,7 +109,7 @@
   }
   input[type=text]:focus, input[type=password]:focus{
     border-color:var(--violet);
-    box-shadow:0 0 0 3px rgba(139,92,246,.15);
+    box-shadow:0 0 0 3px rgba(22,163,74,.18);
   }
   .btn{
     width:100%;
@@ -125,9 +125,9 @@
     letter-spacing:.5px;
     cursor:pointer;
     transition:transform .15s, opacity .15s, box-shadow .2s;
-    box-shadow:0 8px 24px rgba(139,123,255,.35);
+    box-shadow:0 8px 24px rgba(22,163,74,.35);
   }
-  .btn:hover{transform:translateY(-1px); box-shadow:0 10px 30px rgba(75,227,214,.45);}
+  .btn:hover{transform:translateY(-1px); box-shadow:0 10px 30px rgba(74,222,128,.45);}
   .btn:active{transform:translateY(0);}
   .btn:disabled{opacity:.5; cursor:not-allowed; transform:none;}
   .error-msg{
@@ -173,12 +173,12 @@
     font-family:var(--mono); font-weight:600; font-size:14px;
     display:flex; align-items:center; gap:8px;
   }
-  .status-dot{width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 8px rgba(75,227,214,.7); animation:pulse 1.6s infinite;}
+  .status-dot{width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 8px rgba(74,222,128,.7); animation:pulse 1.6s infinite;}
   .lock-badge{
     font-family:var(--mono); font-size:11px; color:var(--teal);
-    border:1px solid rgba(75,227,214,.35); padding:4px 9px; border-radius:20px;
+    border:1px solid rgba(74,222,128,.35); padding:4px 9px; border-radius:20px;
     display:flex; align-items:center; gap:5px;
-    background:rgba(75,227,214,.08);
+    background:rgba(74,222,128,.08);
   }
   .leave-btn{
     background:none; border:1px solid var(--border); color:var(--muted);
@@ -191,7 +191,7 @@
     font-family:var(--mono); font-size:15px; padding:6px 10px; border-radius:8px; cursor:pointer;
     transition:background .2s, border-color .2s;
   }
-  .call-btn:hover{ background:rgba(45,214,196,.12); border-color:var(--teal); }
+  .call-btn:hover{ background:rgba(74,222,128,.12); border-color:var(--teal); }
   .call-btn.active-call{ color:var(--danger); border-color:rgba(248,113,113,.4); animation:pulse 1.4s infinite; }
 
   .call-overlay{
@@ -249,11 +249,11 @@
   @keyframes rise{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
   .msg.me{
     align-self:flex-end;
-    background:linear-gradient(135deg, rgba(139,123,255,.85), rgba(75,227,214,.75));
+    background:linear-gradient(135deg, rgba(22,163,74,.85), rgba(74,222,128,.75));
     color:#070907;
     border-bottom-right-radius:4px;
     font-weight:500;
-    box-shadow:0 4px 16px rgba(139,123,255,.25);
+    box-shadow:0 4px 16px rgba(22,163,74,.25);
   }
   .msg.them{
     align-self:flex-start;
@@ -369,7 +369,7 @@
   .msg.audio-msg audio{
     width:230px; max-width:58vw; display:block; border-radius:20px; height:36px;
   }
-  audio::-webkit-media-controls-panel{ background-color:#0f1420; }
+  audio::-webkit-media-controls-panel{ background-color:#141a14; }
 
   /* ---------- Hamburger menu + drawer ---------- */
   .hamburger-btn{
@@ -832,6 +832,26 @@
     let myRole = null;
     let typingTimeout = null;
 
+    // XATO TUZATILDI: bu brauzer uchun doimiy identifikator — shu orqali
+    // server "sizning rolingiz avval A/B edi" deb eslab qoladi, hatto ikkalangiz
+    // ham chiqib ketib, boshqa tartibda qayta ulanganingizda ham. Aks holda
+    // eski (saqlangan) xabarlar "men"/"u" bo'lib noto'g'ri ko'rinishi mumkin edi.
+    function getClientId(){
+      try{
+        let id = localStorage.getItem('secureLineClientId');
+        if(!id){
+          id = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)));
+          localStorage.setItem('secureLineClientId', id);
+        }
+        return id;
+      }catch(err){
+        // localStorage o'chirilgan bo'lsa ham chat ishlashda davom etadi,
+        // faqat rol "eslab qolish" imkoniyati bo'lmaydi.
+        return null;
+      }
+    }
+    const clientId = getClientId();
+
     // ---------- Ovozli xabar holati ----------
     let mediaRecorder = null;
     let mediaStream = null;
@@ -1013,7 +1033,7 @@
         const hash = await authHashFor(password, room);
         currentRoom = room;
         const notifyChatId = notifyInput.value.trim() || null;
-        socket.emit('join-room', { room, authHash: hash, notifyChatId });
+        socket.emit('join-room', { room, authHash: hash, notifyChatId, clientId });
       }catch(err){
         showError(t('errors.unexpected'));
         joinBtn.disabled = false;
@@ -1394,6 +1414,7 @@
     let callTimerInterval = null;
     let callStartTime = null;
     let isMuted = false;
+    let disconnectGraceTimeout = null;
 
     function setCallOverlay(statusKey, actionsHtml){
       callStatusText.textContent = t(statusKey);
@@ -1417,6 +1438,7 @@
     }
 
     function cleanupCall(){
+      if(disconnectGraceTimeout){ clearTimeout(disconnectGraceTimeout); disconnectGraceTimeout = null; }
       if(pc){ pc.close(); pc = null; }
       if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; }
       stopCallTimer();
@@ -1435,14 +1457,31 @@
         remoteAudio.srcObject = e.streams[0];
       };
       conn.onconnectionstatechange = () => {
-        if(conn.connectionState === 'connected' && callState !== 'active'){
-          callState = 'active';
-          callBtn.classList.add('active-call');
-          setCallOverlay('call.inCall', activeCallActionsHtml());
-          bindActiveCallButtons();
-          startCallTimer();
+        if(conn.connectionState === 'connected'){
+          // XATO TUZATILDI: agar vaqtinchalik uzilishdan keyin qayta ulansa,
+          // avval rejalashtirilgan "tugatish" bekor qilinadi.
+          if(disconnectGraceTimeout){ clearTimeout(disconnectGraceTimeout); disconnectGraceTimeout = null; }
+          if(callState !== 'active'){
+            callState = 'active';
+            callBtn.classList.add('active-call');
+            setCallOverlay('call.inCall', activeCallActionsHtml());
+            bindActiveCallButtons();
+            startCallTimer();
+          }
         }
-        if(['disconnected','failed','closed'].includes(conn.connectionState)){
+        if(conn.connectionState === 'disconnected'){
+          // XATO TUZATILDI: 'disconnected' ko'pincha vaqtinchalik tarmoq
+          // uzilishi bo'ladi va o'zi tiklanishi mumkin — darhol qo'ng'iroqni
+          // tugatish o'rniga bir necha soniya kutamiz.
+          if(!disconnectGraceTimeout){
+            disconnectGraceTimeout = setTimeout(() => {
+              disconnectGraceTimeout = null;
+              if(callState !== 'idle') endCall(true);
+            }, 4000);
+          }
+        }
+        if(['failed','closed'].includes(conn.connectionState)){
+          if(disconnectGraceTimeout){ clearTimeout(disconnectGraceTimeout); disconnectGraceTimeout = null; }
           if(callState !== 'idle') endCall(true);
         }
       };
