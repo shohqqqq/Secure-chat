@@ -126,9 +126,16 @@ async function startTelegramSelfServiceBot(){
 
 startTelegramSelfServiceBot();
 
-function assignRole(r, socketId){
-  if (!r.roleASocketId) { r.roleASocketId = socketId; return 'A'; }
-  if (!r.roleBSocketId) { r.roleBSocketId = socketId; return 'B'; }
+function assignRole(r, socketId, clientId){
+  // XATO TUZATILDI: avval "kim birinchi ulansa shu A" edi — agar ikkalasi ham
+  // chiqib ketib, keyin BOSHQA tartibda qayta ulansa, rollar almashib qolib,
+  // eski (saqlangan) xabarlar tarixida "men"/"u" noto'g'ri chiqib qolar edi.
+  // Endi har bir brauzer o'zining doimiy clientId'i orqali avvalgi rolini
+  // qaytarib oladi — ulanish tartibi endi muhim emas.
+  if (clientId && r.roleAClientId === clientId) { r.roleASocketId = socketId; return 'A'; }
+  if (clientId && r.roleBClientId === clientId) { r.roleBSocketId = socketId; return 'B'; }
+  if (!r.roleASocketId) { r.roleASocketId = socketId; r.roleAClientId = clientId || null; return 'A'; }
+  if (!r.roleBSocketId) { r.roleBSocketId = socketId; r.roleBClientId = clientId || null; return 'B'; }
   return null; // xona to'lgan
 }
 
@@ -153,11 +160,12 @@ setInterval(() => {
 }, 60 * 60 * 1000);
 
 io.on('connection', (socket) => {
-  socket.on('join-room', ({ room, authHash, notifyChatId }) => {
+  socket.on('join-room', ({ room, authHash, notifyChatId, clientId }) => {
     if (typeof room !== 'string' || typeof authHash !== 'string' || !room.trim() || !authHash.trim()) {
       socket.emit('join-error', { reason: 'invalid', message: 'Xona nomi yoki parol noto\'g\'ri formatda.' });
       return;
     }
+    const cleanClientId = (typeof clientId === 'string' && clientId.trim()) ? clientId.trim().slice(0, 100) : null;
 
     const roomName = room.trim();
     let r = rooms.get(roomName);
@@ -169,6 +177,8 @@ io.on('connection', (socket) => {
         authHash,
         roleASocketId: null,
         roleBSocketId: null,
+        roleAClientId: null,
+        roleBClientId: null,
         creatorChatId: cleanChatId,
         lastNotifiedAt: 0,
         history: [],
@@ -182,7 +192,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const role = assignRole(r, socket.id);
+    const role = assignRole(r, socket.id, cleanClientId);
     if (!role) {
       socket.emit('join-error', { reason: 'full', message: 'Bu xona allaqachon 2 kishi bilan to\'lgan.' });
       return;
