@@ -46,10 +46,10 @@
   .hs-dot{
     width:10px; height:10px; border-radius:50%;
     background:var(--muted);
-    box-shadow:0 0 0 rgba(74,222,128,0);
+    box-shadow:0 0 0 rgba(45,214,196,0);
     transition:background .3s;
   }
-  .hs-dot.active{background:var(--teal); box-shadow:0 0 12px rgba(74,222,128,.7); animation:pulse 1.6s infinite;}
+  .hs-dot.active{background:var(--teal); box-shadow:0 0 12px rgba(45,214,196,.7); animation:pulse 1.6s infinite;}
   .hs-line{width:60px; height:1px; background:linear-gradient(90deg,var(--muted),var(--muted));}
   .hs-line.active{background:linear-gradient(90deg,var(--teal),var(--violet)); height:2px;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
@@ -109,7 +109,7 @@
   }
   input[type=text]:focus, input[type=password]:focus{
     border-color:var(--violet);
-    box-shadow:0 0 0 3px rgba(22,163,74,.18);
+    box-shadow:0 0 0 3px rgba(139,92,246,.15);
   }
   .btn{
     width:100%;
@@ -125,9 +125,9 @@
     letter-spacing:.5px;
     cursor:pointer;
     transition:transform .15s, opacity .15s, box-shadow .2s;
-    box-shadow:0 8px 24px rgba(22,163,74,.35);
+    box-shadow:0 8px 24px rgba(139,123,255,.35);
   }
-  .btn:hover{transform:translateY(-1px); box-shadow:0 10px 30px rgba(74,222,128,.45);}
+  .btn:hover{transform:translateY(-1px); box-shadow:0 10px 30px rgba(75,227,214,.45);}
   .btn:active{transform:translateY(0);}
   .btn:disabled{opacity:.5; cursor:not-allowed; transform:none;}
   .error-msg{
@@ -173,12 +173,12 @@
     font-family:var(--mono); font-weight:600; font-size:14px;
     display:flex; align-items:center; gap:8px;
   }
-  .status-dot{width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 8px rgba(74,222,128,.7); animation:pulse 1.6s infinite;}
+  .status-dot{width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 8px rgba(75,227,214,.7); animation:pulse 1.6s infinite;}
   .lock-badge{
     font-family:var(--mono); font-size:11px; color:var(--teal);
-    border:1px solid rgba(74,222,128,.35); padding:4px 9px; border-radius:20px;
+    border:1px solid rgba(75,227,214,.35); padding:4px 9px; border-radius:20px;
     display:flex; align-items:center; gap:5px;
-    background:rgba(74,222,128,.08);
+    background:rgba(75,227,214,.08);
   }
   .leave-btn{
     background:none; border:1px solid var(--border); color:var(--muted);
@@ -191,7 +191,7 @@
     font-family:var(--mono); font-size:15px; padding:6px 10px; border-radius:8px; cursor:pointer;
     transition:background .2s, border-color .2s;
   }
-  .call-btn:hover{ background:rgba(74,222,128,.12); border-color:var(--teal); }
+  .call-btn:hover{ background:rgba(45,214,196,.12); border-color:var(--teal); }
   .call-btn.active-call{ color:var(--danger); border-color:rgba(248,113,113,.4); animation:pulse 1.4s infinite; }
 
   .call-overlay{
@@ -249,11 +249,11 @@
   @keyframes rise{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
   .msg.me{
     align-self:flex-end;
-    background:linear-gradient(135deg, rgba(22,163,74,.85), rgba(74,222,128,.75));
+    background:linear-gradient(135deg, rgba(139,123,255,.85), rgba(75,227,214,.75));
     color:#070907;
     border-bottom-right-radius:4px;
     font-weight:500;
-    box-shadow:0 4px 16px rgba(22,163,74,.25);
+    box-shadow:0 4px 16px rgba(139,123,255,.25);
   }
   .msg.them{
     align-self:flex-start;
@@ -325,14 +325,27 @@
     animation:pulse 1s infinite;
   }
 
-  .img-btn{
+  .img-btn, .file-btn{
     width:46px; height:46px; border-radius:12px; flex-shrink:0; cursor:pointer;
     background:var(--surface); border:1px solid var(--border); color:var(--muted);
     font-size:19px; display:flex; align-items:center; justify-content:center;
     transition:background .2s, color .2s, border-color .2s;
   }
-  .img-btn:hover{border-color:var(--violet); color:var(--text);}
-  .img-btn:disabled{opacity:.5; cursor:not-allowed;}
+  .img-btn:hover, .file-btn:hover{border-color:var(--violet); color:var(--text);}
+  .img-btn:disabled, .file-btn:disabled{opacity:.5; cursor:not-allowed;}
+
+  .msg.file-msg{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; min-width:200px;
+  }
+  .msg.file-msg .file-icon{ font-size:24px; flex-shrink:0; }
+  .msg.file-msg .file-info{ display:flex; flex-direction:column; overflow:hidden; }
+  .msg.file-msg .file-name{
+    font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;
+  }
+  .msg.file-msg .file-size{ font-size:11px; opacity:.75; }
+  .msg.file-msg a.file-download{
+    margin-left:auto; flex-shrink:0; font-size:18px; text-decoration:none; color:inherit;
+  }
 
   .msg.image-msg{padding:6px; cursor:default;}
   .msg.image-msg img{
@@ -369,7 +382,7 @@
   .msg.audio-msg audio{
     width:230px; max-width:58vw; display:block; border-radius:20px; height:36px;
   }
-  audio::-webkit-media-controls-panel{ background-color:#141a14; }
+  audio::-webkit-media-controls-panel{ background-color:#0f1420; }
 
   /* ---------- Hamburger menu + drawer ---------- */
   .hamburger-btn{
@@ -517,6 +530,8 @@
         <textarea id="msgInput" data-i18n-placeholder="msgPlaceholder" placeholder="Xabar yozing..." rows="1"></textarea>
         <input type="file" id="imgFileInput" accept="image/*" style="display:none;">
         <button class="img-btn" id="imgBtn" aria-label="Rasm yuborish">📷</button>
+        <input type="file" id="docFileInput" style="display:none;">
+        <button class="file-btn" id="fileBtn" aria-label="Fayl yuborish">📎</button>
         <button class="mic-btn" id="micBtn" aria-label="Ovozli xabar">🎤</button>
         <button class="send-btn" id="sendBtn" aria-label="Yuborish">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -608,7 +623,9 @@
           audioTooLong: "Audio juda uzun — qisqaroq yozib ko'ring.",
           audioSendError: 'Ovozli xabarni yuborishda xatolik.',
           imageTooBig: 'Rasm hajmi juda katta.',
-          imageSendError: 'Rasmni yuborishda xatolik yuz berdi.'
+          imageSendError: 'Rasmni yuborishda xatolik yuz berdi.',
+          fileTooBig: 'Fayl hajmi juda katta (6MB dan katta).',
+          fileSendError: "Faylni yuborishda xatolik yuz berdi."
         }
       },
       ru: {
@@ -669,7 +686,9 @@
           audioTooLong: 'Аудио слишком длинное — запишите короче.',
           audioSendError: 'Ошибка при отправке голосового сообщения.',
           imageTooBig: 'Размер изображения слишком большой.',
-          imageSendError: 'Ошибка при отправке изображения.'
+          imageSendError: 'Ошибка при отправке изображения.',
+          fileTooBig: 'Файл слишком большой (более 6MB).',
+          fileSendError: 'Ошибка при отправке файла.'
         }
       },
       en: {
@@ -730,7 +749,9 @@
           audioTooLong: 'Recording too long — keep it shorter.',
           audioSendError: 'Error sending voice message.',
           imageTooBig: 'Image is too large.',
-          imageSendError: 'Error sending image.'
+          imageSendError: 'Error sending image.',
+          fileTooBig: 'File is too large (over 6MB).',
+          fileSendError: 'Error sending file.'
         }
       }
     };
@@ -818,6 +839,8 @@
     const cancelRecordBtn = document.getElementById('cancelRecordBtn');
     const imgBtn = document.getElementById('imgBtn');
     const imgFileInput = document.getElementById('imgFileInput');
+    const fileBtn = document.getElementById('fileBtn');
+    const docFileInput = document.getElementById('docFileInput');
     const lightbox = document.getElementById('lightbox');
     const lightboxImg = document.getElementById('lightboxImg');
     const callBtn = document.getElementById('callBtn');
@@ -831,26 +854,6 @@
     let currentRoom = null;
     let myRole = null;
     let typingTimeout = null;
-
-    // XATO TUZATILDI: bu brauzer uchun doimiy identifikator — shu orqali
-    // server "sizning rolingiz avval A/B edi" deb eslab qoladi, hatto ikkalangiz
-    // ham chiqib ketib, boshqa tartibda qayta ulanganingizda ham. Aks holda
-    // eski (saqlangan) xabarlar "men"/"u" bo'lib noto'g'ri ko'rinishi mumkin edi.
-    function getClientId(){
-      try{
-        let id = localStorage.getItem('secureLineClientId');
-        if(!id){
-          id = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)));
-          localStorage.setItem('secureLineClientId', id);
-        }
-        return id;
-      }catch(err){
-        // localStorage o'chirilgan bo'lsa ham chat ishlashda davom etadi,
-        // faqat rol "eslab qolish" imkoniyati bo'lmaydi.
-        return null;
-      }
-    }
-    const clientId = getClientId();
 
     // ---------- Ovozli xabar holati ----------
     let mediaRecorder = null;
@@ -991,6 +994,32 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    function formatFileSize(bytes){
+      if(bytes < 1024) return bytes + ' B';
+      if(bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function addFileMessage(blob, filename, who, id){
+      const url = URL.createObjectURL(blob);
+      const div = document.createElement('div');
+      div.className = 'msg file-msg ' + who;
+      if(id) div.dataset.msgId = id;
+      const time = new Date().toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit'});
+      const statusHtml = (who === 'me') ? ` <span class="status" data-status>✓</span>` : '';
+      const safeName = escapeHtml(filename || 'fayl');
+      div.innerHTML = `
+        <span class="file-icon">📄</span>
+        <div class="file-info">
+          <span class="file-name">${safeName}</span>
+          <span class="file-size">${formatFileSize(blob.size)}<span class="meta" style="display:inline;">${time}${statusHtml}</span></span>
+        </div>
+        <a class="file-download" href="${url}" download="${safeName}" aria-label="Yuklab olish">⬇️</a>
+      `;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
     lightbox.addEventListener('click', () => {
       lightbox.classList.remove('show');
       lightboxImg.src = '';
@@ -1033,7 +1062,7 @@
         const hash = await authHashFor(password, room);
         currentRoom = room;
         const notifyChatId = notifyInput.value.trim() || null;
-        socket.emit('join-room', { room, authHash: hash, notifyChatId, clientId });
+        socket.emit('join-room', { room, authHash: hash, notifyChatId });
       }catch(err){
         showError(t('errors.unexpected'));
         joinBtn.disabled = false;
@@ -1083,6 +1112,11 @@
             const cipherBuf = base64ToBuf(payload.data);
             const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, cryptoKey, cipherBuf);
             addImageMessage(new Blob([plainBuf], { type: payload.mime || 'image/jpeg' }), who, payload.id);
+          } else if(payload.type === 'file'){
+            const iv = new Uint8Array(base64ToBuf(payload.iv));
+            const cipherBuf = base64ToBuf(payload.data);
+            const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, cryptoKey, cipherBuf);
+            addFileMessage(new Blob([plainBuf], { type: payload.mime || 'application/octet-stream' }), payload.filename, who, payload.id);
           } else {
             const text = await decryptText(payload.iv, payload.data);
             addMessage(text, who, payload.id);
@@ -1117,6 +1151,11 @@
           const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, cryptoKey, cipherBuf);
           const blob = new Blob([plainBuf], { type: payload.mime || 'image/jpeg' });
           addImageMessage(blob, 'them', payload.id);
+        } else if(payload.type === 'file'){
+          const cipherBuf = base64ToBuf(payload.data);
+          const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, cryptoKey, cipherBuf);
+          const blob = new Blob([plainBuf], { type: payload.mime || 'application/octet-stream' });
+          addFileMessage(blob, payload.filename, 'them', payload.id);
         } else {
           const text = await decryptText(payload.iv, payload.data);
           addMessage(text, 'them', payload.id);
@@ -1384,6 +1423,49 @@
       }
     });
 
+    // ---------- Fayl (hujjat) yuborish ----------
+    const MAX_FILE_BYTES = 6 * 1024 * 1024; // 6MB
+
+    fileBtn.addEventListener('click', () => {
+      if(!cryptoKey){ showToast(t('toast.connectFirst')); return; }
+      docFileInput.value = '';
+      docFileInput.click();
+    });
+
+    docFileInput.addEventListener('change', async () => {
+      const file = docFileInput.files && docFileInput.files[0];
+      if(!file) return;
+
+      if(file.size > MAX_FILE_BYTES){
+        showToast(t('toast.fileTooBig'));
+        return;
+      }
+
+      fileBtn.disabled = true;
+      fileBtn.textContent = '⏳';
+
+      try{
+        const arrayBuf = await file.arrayBuffer();
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const cipherBuf = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, cryptoKey, arrayBuf);
+        const id = genMsgId();
+        socket.emit('encrypted-message', {
+          type: 'file',
+          id,
+          mime: file.type || 'application/octet-stream',
+          filename: file.name,
+          iv: bufToBase64(iv),
+          data: bufToBase64(cipherBuf)
+        });
+        addFileMessage(new Blob([arrayBuf], { type: file.type }), file.name, 'me', id);
+      }catch(err){
+        showToast(t('toast.fileSendError'));
+      }finally{
+        fileBtn.disabled = false;
+        fileBtn.textContent = '📎';
+      }
+    });
+
     // ---------- Ovozli qo'ng'iroq (WebRTC) ----------
     // STUN — ikkala tomon to'g'ridan-to'g'ri ulanishga harakat qiladi (tez, bepul).
     // TURN — agar to'g'ridan-to'g'ri ulanish imkonsiz bo'lsa, ovoz shu vositachi orqali
@@ -1414,7 +1496,6 @@
     let callTimerInterval = null;
     let callStartTime = null;
     let isMuted = false;
-    let disconnectGraceTimeout = null;
 
     function setCallOverlay(statusKey, actionsHtml){
       callStatusText.textContent = t(statusKey);
@@ -1438,7 +1519,6 @@
     }
 
     function cleanupCall(){
-      if(disconnectGraceTimeout){ clearTimeout(disconnectGraceTimeout); disconnectGraceTimeout = null; }
       if(pc){ pc.close(); pc = null; }
       if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; }
       stopCallTimer();
@@ -1457,31 +1537,14 @@
         remoteAudio.srcObject = e.streams[0];
       };
       conn.onconnectionstatechange = () => {
-        if(conn.connectionState === 'connected'){
-          // XATO TUZATILDI: agar vaqtinchalik uzilishdan keyin qayta ulansa,
-          // avval rejalashtirilgan "tugatish" bekor qilinadi.
-          if(disconnectGraceTimeout){ clearTimeout(disconnectGraceTimeout); disconnectGraceTimeout = null; }
-          if(callState !== 'active'){
-            callState = 'active';
-            callBtn.classList.add('active-call');
-            setCallOverlay('call.inCall', activeCallActionsHtml());
-            bindActiveCallButtons();
-            startCallTimer();
-          }
+        if(conn.connectionState === 'connected' && callState !== 'active'){
+          callState = 'active';
+          callBtn.classList.add('active-call');
+          setCallOverlay('call.inCall', activeCallActionsHtml());
+          bindActiveCallButtons();
+          startCallTimer();
         }
-        if(conn.connectionState === 'disconnected'){
-          // XATO TUZATILDI: 'disconnected' ko'pincha vaqtinchalik tarmoq
-          // uzilishi bo'ladi va o'zi tiklanishi mumkin — darhol qo'ng'iroqni
-          // tugatish o'rniga bir necha soniya kutamiz.
-          if(!disconnectGraceTimeout){
-            disconnectGraceTimeout = setTimeout(() => {
-              disconnectGraceTimeout = null;
-              if(callState !== 'idle') endCall(true);
-            }, 4000);
-          }
-        }
-        if(['failed','closed'].includes(conn.connectionState)){
-          if(disconnectGraceTimeout){ clearTimeout(disconnectGraceTimeout); disconnectGraceTimeout = null; }
+        if(['disconnected','failed','closed'].includes(conn.connectionState)){
           if(callState !== 'idle') endCall(true);
         }
       };
