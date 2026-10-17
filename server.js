@@ -1,297 +1,177 @@
+// Secure Line v2: akkauntlar (parol), N a'zoli xonalar, E2E relay, AI proxy.
+// Env: ANTHROPIC_API_KEY, TOKEN_SECRET (uzun tasodifiy matn), PORT
 const express = require('express');
 const http = require('http');
+const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const { Server } = require('socket.io');
 
 const app = express();
+app.use(express.json({ limit: '1mb' }));
 const server = http.createServer(app);
-const io = new Server(server, {
-  // Xabar hajmini cheklaymiz — himoya uchun (ovozli xabar va rasm uchun kattaroq)
-  maxHttpBufferSize: 9e6
+const io = new Server(server, { maxHttpBufferSize: 9e6 });
+
+// ---- Oddiy fayl-baza (Render bepul tarifida qayta ishga tushsa o'chib ketadi!) ----
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data.json');
+let db = { secret: crypto.randomBytes(32).toString('hex'), users: {} };
+try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch {}
+const save = () => { try { fs.writeFileSync(DB_FILE, JSON.stringify(db)); } catch (e) { console.error(e.message); } };
+const SECRET = process.env.TOKEN_SECRET || db.secret;
+
+const hashPw = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString('hex');
+const sign = (u) => {
+  const p = u + '.' + (Date.now() + 30 * 864e5);
+  return p + '.' + crypto.createHmac('sha256', SECRET).update(p).digest('hex');
+};
+const verify = (t) => {
+  if (typeof t !== 'string') return null;
+  const [u, exp, sig] = t.split('.');
+  if (!u || !exp || !sig) return null;
+  const good = crypto.createHmac('sha256', SECRET).update(u + '.' + exp).digest('hex');
+  if (sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) return null;
+  if (Date.now() > +exp) return null;
+  return db.users[u] ? u : null;
+};
+const authReq = (req) => verify((req.headers.authorization || '').replace('Bearer ', ''));
+
+// Login urinishlarini cheklash (IP bo'yicha, 1 daqiqada 10 ta)
+const tries = new Map();
+const limited = (ip) => {
+  const now = Date.now();
+  const a = (tries.get(ip) || []).filter(t => now - t < 60000);
+  a.push(now); tries.set(ip, a);
+  return a.length > 10;
+};
+
+app.get('/api/health', (req, res) => res.send('ok'));
+
+app.post('/api/register', (req, res) => {
+  if (limited(req.ip)) return res.status(429).json({ error: "Ko'p urinish, 1 daqiqa kuting" });
+  const { username, password } = req.body || {};
+  if (typeof username !== 'string' || !/^[a-z0-9_]{3,20}$/.test(username))
+    return res.status(400).json({ error: "Ism: 3-20 ta kichik lotin harf, raqam yoki _" });
+  if (typeof password !== 'string' || password.length < 6)
+    return res.status(400).json({ error: "Parol kamida 6 belgi bo'lsin" });
+  if (db.users[username]) return res.status(409).json({ error: 'Bu ism band' });
+  const salt = crypto.randomBytes(16).toString('hex');
+  db.users[username] = { salt, hash: hashPw(password, salt), created: Date.now() };
+  save();
+  res.json({ token: sign(username), username });
+});
+
+app.post('/api/login', (req, res) => {
+  if (limited(req.ip)) return res.status(429).json({ error: "Ko'p urinish, 1 daqiqa kuting" });
+  const { username, password } = req.body || {};
+  const u = typeof username === 'string' ? db.users[username] : null;
+  if (!u || typeof password !== 'string') return res.status(401).json({ error: "Ism yoki parol noto'g'ri" });
+  const h = hashPw(password, u.salt);
+  if (!crypto.timingSafeEqual(Buffer.from(h), Buffer.from(u.hash)))
+    return res.status(401).json({ error: "Ism yoki parol noto'g'ri" });
+  res.json({ token: sign(username), username });
+});
+
+app.get('/api/user/:name', (req, res) => {
+  if (!authReq(req)) return res.status(401).json({ error: 'auth' });
+  res.json({ exists: !!db.users[req.params.name] });
+});
+
+// ---- AI proxy ----
+const hits = new Map();
+app.post('/api/ai', async (req, res) => {
+  const user = authReq(req);
+  if (!user) return res.status(401).json({ error: 'Qayta kiring' });
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.status(500).json({ error: 'AI sozlanmagan' });
+  const now = Date.now();
+  const arr = (hits.get(user) || []).filter(t => now - t < 60000);
+  if (arr.length >= 20) return res.status(429).json({ error: "Juda ko'p so'rov" });
+  arr.push(now); hits.set(user, arr);
+
+  const msgs = Array.isArray(req.body.messages) ? req.body.messages.slice(-20) : [];
+  if (!msgs.length || msgs.some(m => !['user', 'assistant'].includes(m.role) || typeof m.content !== 'string'))
+    return res.status(400).json({ error: "Noto'g'ri so'rov" });
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5-5',
+        max_tokens: 1000,
+        system: "Qisqa va aniq javob ber. Foydalanuvchi qaysi tilda yozsa, shu tilda javob ber.",
+        messages: msgs
+      })
+    });
+    const j = await r.json();
+    if (!r.ok) return res.status(502).json({ error: j.error?.message || 'AI xatosi' });
+    res.json({ text: j.content.filter(b => b.type === 'text').map(b => b.text).join('\n') });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+// ---- Chat (faqat tokenli foydalanuvchilar) ----
+const rooms = new Map();
+const HISTORY_LIMIT = 500;
+const EXPIRY = 7 * 24 * 3600 * 1000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [n, r] of rooms) if (r.members.size === 0 && now - r.lastActivity > EXPIRY) rooms.delete(n);
+}, 3600 * 1000);
+
+io.use((socket, next) => {
+  const u = verify(socket.handshake.auth && socket.handshake.auth.token);
+  if (!u) return next(new Error('auth'));
+  socket.data.user = u;
+  next();
+});
+
+io.on('connection', (socket) => {
+  socket.on('join-room', ({ room, authHash, max } = {}) => {
+    if (![room, authHash].every(v => typeof v === 'string' && v.trim()))
+      return socket.emit('join-error', { message: "Ma'lumot noto'g'ri." });
+    const user = socket.data.user;
+
+    // Do'st xonasiga faqat ikkala do'stning o'zi kira oladi
+    if (room.startsWith('dm:')) {
+      const p = room.slice(3).split('&');
+      if (p.length !== 2 || !p.includes(user)) return socket.emit('join-error', { message: 'Ruxsat yo\'q.' });
+    }
+
+    let r = rooms.get(room);
+    if (!r) {
+      r = { authHash, max: Math.min(Math.max(parseInt(max) || 2, 2), 50), members: new Map(), history: [], lastActivity: Date.now() };
+      rooms.set(room, r);
+    }
+    if (r.authHash !== authHash) return socket.emit('join-error', { message: "Parol noto'g'ri." });
+    if (r.members.size >= r.max) return socket.emit('join-error', { message: "Xona to'lgan." });
+
+    r.members.set(socket.id, user);
+    r.lastActivity = Date.now();
+    socket.join(room);
+    socket.data.room = room;
+    socket.emit('joined', { peers: r.members.size });
+    socket.emit('chat-history', { messages: r.history });
+    socket.to(room).emit('members', { peers: r.members.size });
+  });
+
+  socket.on('encrypted-message', (p) => {
+    const room = socket.data.room, r = rooms.get(room);
+    if (!r || !r.members.has(socket.id)) return;
+    if (!p || typeof p.iv !== 'string' || typeof p.data !== 'string') return;
+    const stored = { ...p, senderName: r.members.get(socket.id), ts: Date.now() };
+    socket.to(room).emit('encrypted-message', stored);
+    r.history.push(stored);
+    if (r.history.length > HISTORY_LIMIT) r.history.splice(0, r.history.length - HISTORY_LIMIT);
+    r.lastActivity = Date.now();
+  });
+
+  socket.on('disconnect', () => {
+    const room = socket.data.room, r = rooms.get(room);
+    if (!r) return;
+    r.members.delete(socket.id);
+    r.lastActivity = Date.now();
+    io.to(room).emit('members', { peers: r.members.size });
+  });
 });
 
 const PORT = process.env.PORT || 3000;
-
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Frontend uchun ochiq (maxfiy bo'lmagan) sozlama — faqat bot username, token emas.
-app.get('/api/config', (req, res) => {
-  res.json({ telegramBotUsername: TELEGRAM_BOT_USERNAME });
-});
-
-// Shaxsiy TURN server (metered.ca, oyiga 50GB gacha bepul) uchun sozlama.
-// METERED_API_KEY va METERED_DOMAIN Render'ning Environment bo'limida saqlanadi —
-// kalit hech qachon brauzerga to'g'ridan-to'g'ri berilmaydi, faqat shu endpoint orqali
-// har safar yangi, vaqtinchalik TURN login ma'lumotlari so'raladi.
-const METERED_API_KEY = process.env.METERED_API_KEY;
-const METERED_DOMAIN = process.env.METERED_DOMAIN; // masalan: yourapp.metered.live
-
-app.get('/api/turn-credentials', async (req, res) => {
-  if (!METERED_API_KEY || !METERED_DOMAIN) {
-    return res.json({ iceServers: null }); // sozlanmagan — frontend bepul TURN'ga qaytadi
-  }
-  try {
-    const url = `https://${METERED_DOMAIN}/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`;
-    const r = await fetch(url);
-    const iceServers = await r.json();
-    res.json({ iceServers });
-  } catch (err) {
-    console.error('TURN kalitlarini olishda xatolik:', err.message);
-    res.json({ iceServers: null });
-  }
-});
-
-/**
- * Xonalar RAM'da saqlanadi (haqiqiy baza emas — server qayta ishga tushsa,
- * masalan uzoq vaqt ishlatilmay qolib Render uni "uxlatib qo'ysa" yoki yangi
- * kod joylashtirilsa — barcha tarix yo'qoladi).
- *
- * Endi xona ikkala kishi ham chiqib ketgandan so'ng DARHOL o'chirilmaydi —
- * shu bilan bir xil xona nomi + parolni qayta kiritsangiz, avvalgi
- * (shifrlangan) yozishmalar tiklanadi. Uzoq muddat ishlatilmagan xonalar
- * xotirani band qilib qolmasligi uchun 7 kundan keyin avtomatik tozalanadi.
- *
- * Har bir xonada faqat 2 ta "rol" bor: A va B (kim birinchi bo'lsa, o'sha
- * bo'sh rolni egallaydi). Bu shaxsni "eslab qolish" emas — shunchaki shu
- * seansda kim qaysi tomonda ekanini bilish uchun, xabarlarni "men"/"u"
- * qilib to'g'ri joylashtirish uchun ishlatiladi.
- *
- * rooms: Map<roomName, {
- *   authHash: string,
- *   roleASocketId: string|null,
- *   roleBSocketId: string|null,
- *   creatorChatId: string|null,   // "A" rolidagi odamning Telegram chat_id'i (ixtiyoriy)
- *   lastNotifiedAt: number,
- *   history: Array<object>,       // shifrlangan xabarlar arxivi (server ularni o'qiy olmaydi)
- *   lastActivity: number
- * }>
- */
-const rooms = new Map();
-const HISTORY_LIMIT = 500;
-const ROOM_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 kun ishlatilmasa, xona o'chadi
-
-// Telegram bildirishnomasi (ixtiyoriy). Sayt bitta umumiy botga ega (TELEGRAM_BOT_TOKEN),
-// lekin har bir xona yaratuvchisi o'zining shaxsiy chat_id'ini kiritadi — shu sabab
-// bildirishnoma faqat o'sha odamga boradi, boshqa xonalarga aralashmaydi.
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || null;
-const NOTIFY_COOLDOWN_MS = 60 * 1000; // xona uchun 1 daqiqada max 1 marta
-
-async function notifyCreatorViaTelegram(roomName, chatId){
-  if(!TELEGRAM_BOT_TOKEN || !chatId) return;
-  try{
-    const text = `🔔 Secure Line: "${roomName}" xonasida yangi xabar bor. Matn shifrlangani uchun bu yerda ko'rsatilmaydi — saytga kirib ko'ring.`;
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text })
-    });
-  }catch(err){
-    console.error('Telegram bildirishnoma yuborilmadi:', err.message);
-  }
-}
-
-// Foydalanuvchi o'z chat_id'ini bilishi uchun: botga /start yozsa,
-// bot shu odamning chat_id'ini avtomatik qaytarib beradi (qo'lda qidirish shart emas).
-async function startTelegramSelfServiceBot(){
-  if(!TELEGRAM_BOT_TOKEN) return;
-  let offset = 0;
-  const apiBase = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
-
-  while(true){
-    try{
-      const res = await fetch(`${apiBase}/getUpdates?timeout=25&offset=${offset}`);
-      const json = await res.json();
-      if(json.ok && Array.isArray(json.result)){
-        for(const update of json.result){
-          offset = update.update_id + 1;
-          const msg = update.message;
-          if(msg && msg.chat && typeof msg.text === 'string'){
-            const chatId = msg.chat.id;
-            const reply = `👋 Sizning chat ID'ingiz: ${chatId}\n\nBuni "Secure Line" saytida xona yaratganda "Telegram Chat ID" maydoniga kiriting — shunda suhbatdoshingiz yozganda sizga shu yerga bildirishnoma keladi.`;
-            fetch(`${apiBase}/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: chatId, text: reply })
-            }).catch(() => {});
-          }
-        }
-      }
-    }catch(err){
-      console.error('Telegram polling xatosi:', err.message);
-      await new Promise(r => setTimeout(r, 5000));
-    }
-  }
-}
-
-startTelegramSelfServiceBot();
-
-function assignRole(r, socketId){
-  if (!r.roleASocketId) { r.roleASocketId = socketId; return 'A'; }
-  if (!r.roleBSocketId) { r.roleBSocketId = socketId; return 'B'; }
-  return null; // xona to'lgan
-}
-
-function connectedCount(r){
-  return (r.roleASocketId ? 1 : 0) + (r.roleBSocketId ? 1 : 0);
-}
-
-function freeRole(r, socketId){
-  if (r.roleASocketId === socketId) r.roleASocketId = null;
-  if (r.roleBSocketId === socketId) r.roleBSocketId = null;
-}
-
-// Uzoq vaqt (7 kun) ishlatilmagan, hozir bo'sh turgan xonalarni tozalab turadi —
-// xotira cheksiz o'sib ketmasligi uchun.
-setInterval(() => {
-  const now = Date.now();
-  for (const [name, r] of rooms.entries()) {
-    if (connectedCount(r) === 0 && now - r.lastActivity > ROOM_EXPIRY_MS) {
-      rooms.delete(name);
-    }
-  }
-}, 60 * 60 * 1000);
-
-io.on('connection', (socket) => {
-  socket.on('join-room', ({ room, authHash, notifyChatId }) => {
-    if (typeof room !== 'string' || typeof authHash !== 'string' || !room.trim() || !authHash.trim()) {
-      socket.emit('join-error', { reason: 'invalid', message: 'Xona nomi yoki parol noto\'g\'ri formatda.' });
-      return;
-    }
-
-    const roomName = room.trim();
-    let r = rooms.get(roomName);
-
-    if (!r) {
-      // Xona hali mavjud emas — shu foydalanuvchi uni yaratadi.
-      const cleanChatId = (typeof notifyChatId === 'string' && notifyChatId.trim()) ? notifyChatId.trim() : null;
-      r = {
-        authHash,
-        roleASocketId: null,
-        roleBSocketId: null,
-        creatorChatId: cleanChatId,
-        lastNotifiedAt: 0,
-        history: [],
-        lastActivity: Date.now()
-      };
-      rooms.set(roomName, r);
-    }
-
-    if (r.authHash !== authHash) {
-      socket.emit('join-error', { reason: 'wrong-password', message: 'Parol noto\'g\'ri.' });
-      return;
-    }
-
-    const role = assignRole(r, socket.id);
-    if (!role) {
-      socket.emit('join-error', { reason: 'full', message: 'Bu xona allaqachon 2 kishi bilan to\'lgan.' });
-      return;
-    }
-
-    // "A" rolidagi odam har safar qayta ulanganda o'zining Telegram chat_id'ini
-    // yangilashi mumkin (bo'sh qoldirsa, avvalgi qiymat saqlanib qoladi).
-    if (role === 'A' && typeof notifyChatId === 'string' && notifyChatId.trim()) {
-      r.creatorChatId = notifyChatId.trim();
-    }
-
-    socket.join(roomName);
-    socket.data.room = roomName;
-    socket.data.role = role;
-    r.lastActivity = Date.now();
-
-    const peers = connectedCount(r);
-    socket.emit('joined', { room: roomName, peers, role });
-
-    // Avvalgi (shifrlangan) yozishmalar bo'lsa, shu foydalanuvchiga qayta ko'rsatiladi —
-    // server ularning mazmunini bilmaydi, faqat saqlab, qaytarib beradi.
-    if (r.history.length > 0) {
-      socket.emit('chat-history', { messages: r.history, myRole: role });
-    }
-
-    if (peers === 2) {
-      io.to(roomName).emit('system', { key: 'both-connected' });
-    } else {
-      socket.emit('system', { key: 'waiting' });
-    }
-  });
-
-  // Shifrlangan xabarni (matn yoki ovozli) faqat relay qilamiz —
-  // server hech qachon asl mazmunni ko'rmaydi, faqat shifrlangan bloklarni uzatadi
-  // va (endi) shu xona tarixiga qo'shib qo'yadi, keyinroq qayta ko'rish uchun.
-  socket.on('encrypted-message', (payload) => {
-    const roomName = socket.data.room;
-    if (!roomName) return;
-    const r = rooms.get(roomName);
-    if (!r || (r.roleASocketId !== socket.id && r.roleBSocketId !== socket.id)) return;
-    if (!payload || typeof payload.iv !== 'string' || typeof payload.data !== 'string') return;
-
-    const stored = { ...payload, senderRole: socket.data.role, ts: Date.now() };
-    socket.to(roomName).emit('encrypted-message', stored);
-
-    r.history.push(stored);
-    if (r.history.length > HISTORY_LIMIT) {
-      r.history.splice(0, r.history.length - HISTORY_LIMIT);
-    }
-    r.lastActivity = Date.now();
-
-    // Faqat "A" bo'lmagan tomon ("B") yozganda, "A"ga bildirishnoma boradi
-    // (agar u o'zining Telegram chat_id'ini bergan bo'lsa).
-    if (socket.data.role === 'B' && r.creatorChatId) {
-      const now = Date.now();
-      if (now - r.lastNotifiedAt > NOTIFY_COOLDOWN_MS) {
-        r.lastNotifiedAt = now;
-        notifyCreatorViaTelegram(roomName, r.creatorChatId);
-      }
-    }
-  });
-
-  socket.on('typing', (isTyping) => {
-    const roomName = socket.data.room;
-    if (!roomName) return;
-    socket.to(roomName).emit('typing', !!isTyping);
-  });
-
-  // "O'qildi" belgisi: qabul qiluvchi xabarni ochgach, shu signalni jo'natuvchiga qaytaradi.
-  // Server bu yerda ham faqat ID'ni relay qiladi, xabar matnini bilmaydi.
-  socket.on('message-read', ({ id } = {}) => {
-    const roomName = socket.data.room;
-    if (!roomName || typeof id !== 'string') return;
-    const r = rooms.get(roomName);
-    if (!r || (r.roleASocketId !== socket.id && r.roleBSocketId !== socket.id)) return;
-    socket.to(roomName).emit('message-read', { id });
-  });
-
-  // Ovozli qo'ng'iroq signalizatsiyasi (WebRTC). Server faqat "pochtachi" —
-  // SDP/ICE ma'lumotlarini ikkinchi tomonga uzatadi, ovozning o'zi hech qachon
-  // serverdan o'tmaydi (brauzerlar to'g'ridan-to'g'ri ulanadi).
-  function relayToRoom(socket, event, payload){
-    const roomName = socket.data.room;
-    if (!roomName) return;
-    const r = rooms.get(roomName);
-    if (!r || (r.roleASocketId !== socket.id && r.roleBSocketId !== socket.id)) return;
-    socket.to(roomName).emit(event, payload);
-  }
-  socket.on('call-offer', (payload) => relayToRoom(socket, 'call-offer', payload));
-  socket.on('call-answer', (payload) => relayToRoom(socket, 'call-answer', payload));
-  socket.on('call-ice-candidate', (payload) => relayToRoom(socket, 'call-ice-candidate', payload));
-  socket.on('call-end', (payload) => relayToRoom(socket, 'call-end', payload));
-  socket.on('call-reject', (payload) => relayToRoom(socket, 'call-reject', payload));
-
-  socket.on('disconnect', () => {
-    const roomName = socket.data.room;
-    if (!roomName) return;
-    const r = rooms.get(roomName);
-    if (!r) return;
-
-    freeRole(r, socket.id);
-    r.lastActivity = Date.now();
-    socket.to(roomName).emit('system', { key: 'partner-left' });
-    socket.to(roomName).emit('call-end', {});
-    // Diqqat: xona bu yerda O'CHIRILMAYDI — tarix saqlanib qoladi, shu bilan
-    // xona nomi + parolni qayta kiritganda avvalgi yozishmalar tiklanadi.
-  });
-});
-
-server.listen(PORT, () => {
-  console.log(`Secure duo chat server ${PORT}-portda ishlamoqda`);
-});
+server.listen(PORT, () => console.log('Secure Line server :' + PORT));
