@@ -854,6 +854,19 @@
     let currentRoom = null;
     let myRole = null;
     let typingTimeout = null;
+    let lastAuthHash = null;
+    let lastNotifyChatId = null;
+
+    // Fayl tanlash, kamera ochish va h.k. paytida brauzer sahifani fonga
+    // o'tkazishi mumkin — bu ba'zan socket ulanishini uzadi. Ulanish qayta
+    // tiklanganda (reconnect), agar biz allaqachon xonada bo'lgan bo'lsak,
+    // avtomatik ravishda qayta kiramiz — shunda suhbatdosh bizni "chiqib
+    // ketdi" deb o'ylamaydi.
+    socket.on('connect', () => {
+      if (currentRoom && lastAuthHash) {
+        socket.emit('join-room', { room: currentRoom, authHash: lastAuthHash, notifyChatId: lastNotifyChatId });
+      }
+    });
 
     // ---------- Ovozli xabar holati ----------
     let mediaRecorder = null;
@@ -882,7 +895,13 @@
     }
 
     function bufToBase64(buf){
-      return btoa(String.fromCharCode(...new Uint8Array(buf)));
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      const chunkSize = 0x8000; // 32768 — katta fayllarda "stack overflow"ni oldini olish uchun bo'lib-bo'lib ishlaymiz
+      for(let i = 0; i < bytes.length; i += chunkSize){
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+      }
+      return btoa(binary);
     }
     function base64ToBuf(b64){
       const bin = atob(b64);
@@ -1062,6 +1081,8 @@
         const hash = await authHashFor(password, room);
         currentRoom = room;
         const notifyChatId = notifyInput.value.trim() || null;
+        lastAuthHash = hash;
+        lastNotifyChatId = notifyChatId;
         socket.emit('join-room', { room, authHash: hash, notifyChatId });
       }catch(err){
         showError(t('errors.unexpected'));
@@ -1100,6 +1121,7 @@
     socket.on('chat-history', async ({ messages, myRole: replayRole }) => {
       if(!Array.isArray(messages)) return;
       for(const payload of messages){
+        if(payload.id && messagesEl.querySelector(`[data-msg-id="${payload.id}"]`)) continue;
         const who = payload.senderRole === replayRole ? 'me' : 'them';
         try{
           if(payload.type === 'audio'){
